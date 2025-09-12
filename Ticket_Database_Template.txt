@@ -1,0 +1,364 @@
+Job Tasks Form Template (Version 2)
+==================================
+
+Purpose:
+This template defines the data flow for the Job Tasks form in Version 2, designed for a central database (e.g., SQL or MongoDB) to ensure scalability and serviceability. It includes fields from JobTask.txt (core, parsed from .eml/.msg emails) and extra fields from JobTasks_Form.html (user-entered), plus generates_notification and a new technical_details dropdown. Fields are marked as Required (must be filled), Optional (user choice), or Suggested (recommended). Demo text and suggestion text guide entry. Dropdowns list boilerplate options for standardization. Field names use snake_case (e.g., job_number) for database scalability. All fields are stored in the jobTasks_jobs table/collection, but only core fields are shown in normal UI views (e.g., jobs list, Outlook-like display). Use this to generate user-friendly forms, widgets, or database schemas, ensuring intuitive data entry and RFC 5322/6532 compliance for parsing.
+
+Hard Rules for Version 2:
+- Database Names: Central database table/collection must be named "jobTasks_jobs". Field names use snake_case (e.g., job_number) for columns/fields to ensure scalability and database convention compliance. UI/JS may use camelCase for compatibility with emailParser.js.
+- Data Entry: Required fields (job_number, job_name) must be validated (non-empty, format check for job_number like VP\d+). Suggested fields show hints (e.g., tooltip with suggestion text). Optional fields are free-form or dropdowns with boilerplate options. Sanitize all inputs (trim, escape special characters).
+- Parsing: Use original emailParser.js methods (e.g., parseEml, parseMsg, extractJobNumber). Default to empty string on parsing failure, log errors for debugging.
+- Storage: Store all fields in jobTasks_jobs table/collection with snake_case columns/fields. Include unique_id (job_number_timestamp) and created_at timestamp (DATE or ISO string). Index job_number for scalability.
+- Usage/Display: Show core fields (job_number, job_name, device_name, problem_description, building, address) in normal UI views (e.g., jobs list, Outlook-like display). Show all fields in detailed views (e.g., edit form). Map UI fields to database fields.
+- Deletion: Implement a two-step deletion UI (first click: trash can icon, second: X to confirm) for removing jobs or resetting forms, ensuring intuitive interaction without dialogs.
+
+Field Definitions:
+------------------
+
+1. ticket_id
+   - Form Label: Job Number
+   - CopyPaste Label: Job Number:
+   - Form Type: Text
+   - Requirement: Required
+   - Parsing Rule: None
+   - Entry Rule: Unique id
+   - Demo Data: 180484
+   - Suggestion Text: Enter the unique ticket identifier
+   - Storage Rule: Store as integer, column ticket_id (INTEGER, FK to tickets.ticket_id).
+   - Usage/Display Rule: Not displayed
+
+2. job_number
+   - Form Label: Job Reference
+   - CopyPaste Label: Job Reference:
+   - Form Type: Text
+   - Requirement: Required
+   - Parsing Rule: Extract from email subject or body to identify specific job/ticket.
+   - Entry Rule: Auto-fill from parsing; user can edit. Validate format (VP\d+ or P\d+), non-empty, show red border if invalid.
+   - Demo Data: V1432965558, P260356256
+   - Suggestion Text: V1432965558, P260356256, ...
+   - Storage Rule: Store as string, column job_number (VARCHAR(200)).
+   - Usage/Display Rule: Show in normal views (e.g., jobs list primary identifier).
+
+3. job_name
+   - Form Label: Job Name
+   - CopyPaste Label: Job Name:
+   - Form Type: Text
+   - Requirement: Required
+   - Parsing Rule: Extract from email subject using extractData in emailParser.js (replace /^Service Call:\s*/i, trim spaces).
+   - Entry Rule: Auto-fill from parsing; user can edit. Validate non-empty, max 200 chars, show red border if invalid.
+   - Demo Data: Service Call B-802641 - SEA124 - Alarm Active - P3 - Reader - P296563983-13
+   - Suggestion Text: SEA82 - Other - P2 - Reader - P165579471
+   - Storage Rule: Store as string, column job_name (VARCHAR(200)).
+   - Usage/Display Rule: Show in normal views (e.g., jobs list header, Outlook-like subject).
+
+4. job_reference_number
+   - Form Label: Reference Number
+   - CopyPaste Label: REF#:
+   - Form Type: Text
+   - Requirement: Optional
+   - Parsing Rule: No parsing (user-entered).
+   - Entry Rule: Free-form text input; no validation.
+   - Demo Data: JSM-3204
+   - Suggestion Text: JSM-3204, JSM-5032, ...
+   - Storage Rule: Store as string, column ref_number (VARCHAR(50)).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+5. job_escort_delay
+   - Form Label: Escort Delay
+   - CopyPaste Label: Escort Delay:
+   - Form Type: Time
+   - Requirement: Optional
+   - Parsing Rule: No parsing.
+   - Entry Rule: Time picker; tooltip with suggestion text. No AM or PM option.
+   - Demo Data: 00:30
+   - Suggestion Text: Specify any escort-related delay, e.g., "00:30" for 30 minutes.
+   - Storage Rule: Store as time, column job_escort_delay (TIME).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+6. job_start_time
+   - Form Label: Start Time
+   - CopyPaste Label: Start Time:
+   - Form Type: Time
+   - Requirement: Required
+   - Parsing Rule: No parsing.
+   - Entry Rule: Time picker; hint with suggestion text as placeholder.
+   - Demo Data: 09:00
+   - Suggestion Text: Enter the job start time, e.g., 09:00, for scheduling.
+   - Storage Rule: Store as time, column job_start_time (TIME).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+7. job_end_time
+   - Form Label: End Time
+   - CopyPaste Label: End Time:
+   - Form Type: Time
+   - Requirement: Required
+   - Parsing Rule: No parsing.
+   - Entry Rule: Time picker; hint with suggestion text.
+   - Demo Data: 17:00
+   - Suggestion Text: Enter the job end time, e.g., 17:00, for scheduling.
+   - Storage Rule: Store as time, column job_end_time (TIME).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+8. job_start_date
+   - Form Label: Start Date
+   - CopyPaste Label: Start Date:
+   - Form Type: Date
+   - Requirement: Required
+   - Parsing Rule: No parsing.
+   - Entry Rule: Date picker; placeholder with suggestion text.
+   - Demo Data: 2025-09-11
+   - Suggestion Text: Select job date, e.g., 2025-09-11.
+   - Storage Rule: Store as date, column job_start_date (DATE).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+9. job_with_who
+   - Form Label: With
+   - CopyPaste Label: With:
+   - Form Type: Text
+   - Requirement: Optional
+   - Parsing Rule: No parsing.
+   - Entry Rule: Free-form; tooltip with suggestion text.
+   - Demo Data: John Doe
+   - Suggestion Text: List the person or team accompanying the job, e.g., John Doe.
+   - Storage Rule: Store as string, column job_with_who (VARCHAR(255)).
+   - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+10. job_materials_used
+    - Form Label: Materials Used
+    - CopyPaste Label: Materials Used:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line input; placeholder with suggestion text.
+    - Demo Data: Screwdriver, wires
+    - Suggestion Text: List materials used, e.g., Screwdriver, wires.
+    - Storage Rule: Store as text, column job_materials_used (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+11. job_materials_needed
+    - Form Label: Materials Needed
+    - CopyPaste Label: Materials Needed:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line input; placeholder with suggestion text.
+    - Demo Data: New reader device
+    - Suggestion Text: Specify materials needed, e.g., New reader device.
+    - Storage Rule: Store as text, column job_materials_needed (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+12. job_hindrances
+    - Form Label: Hindrances
+    - CopyPaste Label: Hindrances:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Access restricted due to security
+    - Suggestion Text: Describe any hindrances, e.g., Access restricted due to security.
+    - Storage Rule: Store as text, column job_hindrances (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+13. job_access_needed
+    - Form Label: Access Needed
+    - CopyPaste Label: Access Needed:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Require keycard for building access
+    - Suggestion Text: Note access requirements, e.g., Require keycard for building access.
+    - Storage Rule: Store as text, column job_access_needed (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+14. job_programming_changes
+    - Form Label: Programming Changes
+    - CopyPaste Label: Programming Changes:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Updated firmware to v2.3
+    - Suggestion Text: Describe programming changes, e.g., Updated firmware to v2.3.
+    - Storage Rule: Store as text, column job_programming_changes (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+15. job_dispatch_type
+    - Form Label: Dispatch Type
+    - CopyPaste Label: Dispatch Type:
+    - Form Type: Dropdown
+    - Requirement: Required
+    - Parsing Rule: No parsing.
+    - Entry Rule: Select with boilerplate options; tooltip with suggestion text.
+    - Boilerplate Options: Sim-T, Corrigo, Spontaneous
+    - Demo Data: Sim-T
+    - Suggestion Text: Select dispatch type, e.g., Sim-T.
+    - Storage Rule: Store as string, column job_dispatch_type (VARCHAR(50)).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+16. job_field_status
+    - Form Label: Field Status
+    - CopyPaste Label: Field Status:
+    - Form Type: Dropdown
+    - Requirement: Required
+    - Parsing Rule: No parsing.
+    - Entry Rule: Select with boilerplate options; hint with suggestion text.
+    - Boilerplate Options: Close, Pending, In Progress, Completed, On Hold, Reassign, Monitor
+    - Demo Data: In Progress
+    - Suggestion Text: Select job status, e.g., In Progress, to track progress.
+    - Storage Rule: Store as string, column job_field_status (VARCHAR(50)).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+17. job_filed_status_notes
+    - Form Label: Field Status Notes
+    - CopyPaste Label: Field Status Notes:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Waiting for parts
+    - Suggestion Text: Add notes on job status, e.g., Waiting for parts.
+    - Storage Rule: Store as text, column job_filed_status_notes (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+18. job_followup_required
+    - Form Label: Follow-Up Required
+    - CopyPaste Label: Follow-Up Required:
+    - Form Type: Boolean/Dropdown
+    - Requirement: Required
+    - Parsing Rule: No parsing.
+    - Entry Rule: Select with boilerplate options; tooltip with suggestion text.
+    - Boilerplate Options: Yes, No
+    - Demo Data: Yes
+    - Suggestion Text: Indicate if follow-ups are needed, e.g., Yes.
+    - Storage Rule: Store as boolean, column job_followup_required (BOOLEAN).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+19. job_device_details
+    - Form Label: Device Details
+    - CopyPaste Label: Device Details:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Model: P296563983-13
+    - Suggestion Text: Provide device details, e.g., Model: P296563983-13.
+    - Storage Rule: Store as text, column job_device_details (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+20. job_trouble_type
+    - Form Label: Trouble Type
+    - CopyPaste Label: Trouble Type:
+    - Form Type: Dropdown
+    - Requirement: Required
+    - Parsing Rule: No parsing.
+    - Entry Rule: Select with boilerplate options; tooltip with suggestion text.
+    - Boilerplate Options: Malfunction, DFO, Line Error, Other
+    - Demo Data: Malfunction
+    - Suggestion Text: Select trouble type, e.g., Malfunction, if applicable.
+    - Storage Rule: Store as string, column job_trouble_type (VARCHAR(50)).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+21. job_trouble_description
+    - Form Label: Trouble Description
+    - CopyPaste Label: Trouble Description:
+    - Form Type: Textarea
+    - Requirement: Required
+    - Parsing Rule: Extract from body using extractProblemDescription in emailParser.js (line-by-line capture after "Problem Description:", clean quoted-printable).
+    - Entry Rule: Auto-fill from parsing; multi-line input. Hint with suggestion text.
+    - Demo Data: Reader malfunctioning
+    - Suggestion Text: Describe the problem, e.g., Reader malfunctioning.
+    - Storage Rule: Store as text, column job_trouble_description (TEXT).
+    - Usage/Display Rule: Show in normal views.
+
+22. job_work_description
+    - Form Label: Work Description
+    - CopyPaste Label: Work Description:
+    - Form Type: Textarea
+    - Requirement: Required
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line; placeholder with suggestion text.
+    - Demo Data: Repaired reader
+    - Suggestion Text: Describe work performed, e.g., Repaired reader.
+    - Storage Rule: Store as text, column job_work_description (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+23. job_technical_details
+    - Form Label: Technical Details
+    - CopyPaste Label: Technical Details:
+    - Form Type: Textarea
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Multi-line with dropdown helper; tooltip with suggestion text.
+    - Boilerplate Options: Wiring checked, Firmware updated, Circuit replaced, Software debugged, Hardware reset, Other
+    - Demo Data: Wiring checked
+    - Suggestion Text: Select or describe technical details, e.g., Wiring checked, or choose Other for custom input.
+    - Storage Rule: Store as text, column job_technical_details (TEXT).
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+24. building
+    - Form Label: Building
+    - CopyPaste Label: Building:
+    - Form Type: Text
+    - Requirement: Suggested
+    - Parsing Rule: Extract from body using extractBuilding in emailParser.js (match /Work Site:\s*([^\r\n]+)/i or variants).
+    - Entry Rule: Auto-fill from parsing; user can edit. Hint with suggestion text.
+    - Demo Data: SEA124
+    - Suggestion Text: Enter building code from email, e.g., SEA124.
+    - Storage Rule: Links to buildings table via building_id.
+    - Usage/Display Rule: Show in normal views.
+
+25. address
+    - Form Label: Address
+    - CopyPaste Label: Address:
+    - Form Type: Text
+    - Requirement: Suggested
+    - Parsing Rule: Extract from body using extractAddress in emailParser.js (match /Work Site Address:\s*([^\r\n]+)/i or variants).
+    - Entry Rule: Auto-fill from parsing; user can edit. Hint with suggestion text.
+    - Demo Data: 123 Main St, Seattle, WA
+    - Suggestion Text: Enter full address from email, e.g., 123 Main St, Seattle, WA.
+    - Storage Rule: Store in buildings table as description field.
+    - Usage/Display Rule: Show in normal views.
+
+26. deviceName
+    - Form Label: Device Name
+    - CopyPaste Label: Device Name:
+    - Form Type: Text
+    - Requirement: Required
+    - Parsing Rule: Extract from body using extractDeviceName in emailParser.js (match /Device Name:\s*([^\r\n]+)/i).
+    - Entry Rule: Auto-fill from parsing; user can edit. Hint with suggestion text.
+    - Demo Data: Reader Device
+    - Suggestion Text: Enter device name from email, e.g., Reader Device.
+    - Storage Rule: Links to devices table via device_id.
+    - Usage/Display Rule: Show in normal views.
+
+27. deviceType
+    - Form Label: Device Type
+    - CopyPaste Label: Device Type:
+    - Form Type: Dropdown
+    - Requirement: Optional
+    - Parsing Rule: No parsing.
+    - Entry Rule: Select with boilerplate options; tooltip with suggestion text.
+    - Boilerplate Options: Reader, Door Contact, SAR, Mag Hold, ADA/Opener, Wave Sensor, REX/EDR, Hinge, Crash Bar, Signal Light/Sounder, Cassette, Camera, Encoder, Other
+    - Demo Data: Reader
+    - Suggestion Text: Select device type, e.g., Reader.
+    - Storage Rule: Store in devices table as device_type field.
+    - Usage/Display Rule: Hide in normal views; show in detailed view.
+
+Display Rules:
+--------------
+- Normal View (e.g., jobs list, Outlook-like email display): Show only core fields: job_number, job_name, device_name, problem_description, building, address.
+- Detailed View (e.g., edit form, full details): Show all fields, including generates_notification and technical_details.
+- Storage: Save all fields in jobTasks_jobs table/collection with snake_case columns, unique_id (job_number_timestamp), and created_at timestamp.
+
+Instructions for AI:
+-------------------
+Use this template to build the Job Tasks form for Version 2:
+- Parse data using original emailParser.js methods (e.g., parseEml, parseMsg, extractJobNumber) for core fields. Default to empty string on failure, log errors.
+- For entry, create form elements with placeholders (demo data), tooltips (suggestion text), validation for required fields (e.g., non-empty job_number, job_name), and dropdowns with boilerplate options (e.g., technical_details: Wiring checked, Firmware updated).
+- For storage, save all fields in jobTasks_jobs table/collection with snake_case columns (e.g., job_number, generates_notification). Include unique_id and created_at. Index job_number for scalability.
+- For usage, display core fields in normal UI (e.g., table for jobs list), hide extra fields (e.g., generates_notification, technical_details) unless in detailed view (e.g., expand button).
+- Implement a two-step deletion UI (first click: trash can icon, second: X to confirm) for jobs or form resets, ensuring intuitive interaction.
+- Ensure user-friendly design (e.g., Outlook-like styling, responsive layout, suggestion text in tooltips).
+- Support RFC 5322 for email structure and RFC 6532 for international headers in parsed fields.
+- Hard rule: Use jobTasks_jobs table/collection, snake_case column names, validate required fields, sanitize inputs.

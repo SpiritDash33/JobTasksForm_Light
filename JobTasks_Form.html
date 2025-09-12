@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Log System</title>
+    <script src="emailParser.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .section {
+            border: 3px solid #333;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+        }
+
+        .section h2 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .edit-section {
+            flex: 2;
+        }
+
+        .jobs-list-section {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .form-row {
+            margin: 10px 0;
+        }
+
+        .spacer {
+            height: 15px;
+            border-bottom: 1px solid #eee;
+            margin: 15px 0;
+        }
+
+        input[type="text"], input[type="date"], input[type="time"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 40px;
+            resize: vertical;
+            overflow: hidden;
+        }
+
+        .required-empty {
+            border: 2px solid #ff0000 !important;
+            background-color: #ffe6e6 !important;
+        }
+
+        .job-link {
+            display: block;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            color: #333;
+            border-radius: 4px;
+        }
+
+        .job-link:hover {
+            background-color: #e9e9e9;
+        }
+
+        .job-link.missing-required {
+            background-color: #ffe6e6;
+            border-color: #ff0000;
+        }
+
+        .job-link.current-job {
+            border-left: 4px solid #007bff;
+        }
+
+        .job-link.missing-required.current-job {
+            border-left: 4px solid #ff0000;
+        }
+
+        .job-summary-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: #f8f9fa;
+        }
+
+        .job-summary-item.missing-required {
+            background-color: #ffe6e6;
+            border-left-color: #ff0000;
+        }
+
+        .job-summary-item .missing-required {
+            background-color: #ffe6e6;
+            color: #721c24;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .job-summary-item .current-job {
+            border-left: 4px solid #007bff;
+            padding-left: 8px;
+        }
+
+        .job-summary-item .missing-required.current-job {
+            border-left: 4px solid #ff0000;
+        }
+
+        .daily-job-box.current-job {
+            border-left: 4px solid #007bff;
+        }
+
+        .daily-job-box {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .daily-job-box.missing-required {
+            background-color: #ffe6e6;
+            border-color: #ff0000;
+        }
+
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #ddd;
+        }
+
+        .calendar-day {
+            background-color: white;
+            padding: 5px;
+            min-height: 60px;
+            font-size: 12px;
+            overflow: hidden;
+        }
+
+        .calendar-day-header {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .calendar-day-number {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .calendar-job {
+            background-color: #e3f2fd;
+            padding: 1px 3px;
+            margin: 1px 0;
+            border-radius: 2px;
+            font-size: 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-job.missing-required {
+            background-color: #ffe6e6;
+        }
+
+        /* Button Styles */
+        .btn-new { background-color: #28a745; color: white; }
+        .btn-save { background-color: #007bff; color: white; }
+        .btn-export { background-color: #6f42c1; color: white; }
+        .btn-copy { background-color: #fd7e14; color: white; }
+        .btn-load { background-color: #20c997; color: white; }
+        .btn-edit { background-color: #ffc107; color: black; }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        .header-buttons {
+            float: right;
+        }
+
+        .form-buttons {
+            margin: 15px 0;
+        }
+
+        .technical-details-container {
+            position: relative;
+        }
+
+        #technicalDetailsDropdown {
+            width: 150px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: inline-block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .required-field {
+            color: #dc3545;
+        }
+
+        .summary-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .summary-left {
+            flex: 2;
+        }
+
+        .summary-right {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        .drop-zone.dragover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+
+        .import-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .import-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .import-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="summary-container">
+        <!-- Job Summary Section -->
+        <div class="section summary-left">
+            <h2>Job Summary
+                <div class="header-buttons">
+                    <button class="btn-copy" onclick="copySummaryToClipboard()">Copy Summary</button>
+                </div>
+            </h2>
+            <div id="jobSummary"></div>
+        </div>
+        
+        <!-- Email Import Section -->
+        <div class="section summary-right">
+            <h2>Email Import</h2>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <p>Drag & drop .msg or .eml files here<br>or click to select</p>
+                <input type="file" id="fileInput" accept=".msg,.eml" multiple style="display: none;">
+            </div>
+            <div id="importStatus"></div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Edit Job Section -->
+        <div class="edit-section">
+            <div class="section">
+                <h2>Edit Job 
+                    <div class="header-buttons">
+                        <button class="btn-new" onclick="createNewJob()">+</button>
+                        <button class="btn-save" onclick="saveCurrentJob()">Save</button>
+                    </div>
+                </h2>
+                
+                <form id="jobForm">
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Job Number: <span class="required-field">*</span></label>
+                            <input type="text" id="job_reference_number" placeholder="Enter job reference number" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Building:</label>
+                            <input type="text" id="building" placeholder="Enter building">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Address:</label>
+                        <input type="text" id="address" placeholder="Enter address">
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Job Name: <span class="required-field">*</span></label>
+                        <input type="text" id="job_name" placeholder="Enter job name" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Related Tickets:</label>
+                        <textarea id="relatedTickets" placeholder="Enter related ticket numbers"></textarea>
+                    </div>
+                    
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Reference Number:</label>
+                            <input type="text" id="job_reference_number_secondary" placeholder="Enter reference number">
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Escort Delay:</label>
+                            <input type="time" id="job_escort_delay" placeholder="Enter escort delay time">
+                        </div>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Start Date: <span class="required-field">*</span></label>
+                            <input type="date" id="job_start_date" required readonly>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Start Time: <span class="required-field">*</span></label>
+                            <input type="time" id="job_start_time" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>End Time: <span class="required-field">*</span></label>
+                            <input type="time" id="job_end_time" required>
+                        </div>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>With:</label>
+                        <input type="text" id="job_with_who" placeholder="Enter team members or assistants">
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Materials Used:</label>
+                        <textarea id="job_materials_used" placeholder="List materials used for this job"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Materials Needed:</label>
+                        <textarea id="job_materials_needed" placeholder="List materials needed for future work"></textarea>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Hindrances:</label>
+                        <textarea id="job_hindrances" placeholder="Describe any obstacles or issues encountered"></textarea>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Access Needed:</label>
+                        <textarea id="job_access_needed" placeholder="Describe access requirements"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Programming Changes:</label>
+                        <textarea id="job_programming_changes" placeholder="Describe any programming modifications"></textarea>
+                    </div>
+                    
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Dispatch Type:</label>
+                            <select id="job_dispatch_type">
+                                <option value="">Select...</option>
+                                <option value="Sim-T">Sim-T</option>
+                                <option value="Corrigo">Corrigo</option>
+                                <option value="Spontaneous">Spontaneous</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Field Status: <span class="required-field">*</span></label>
+                            <select id="job_field_status" required>
+                                <option value="">Select...</option>
+                                <option value="close">Close</option>
+                                <option value="pending">Pending</option>
+                                <option value="in progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="on hold">On Hold</option>
+                                <option value="reassign">Reassign</option>
+                                <option value="monitor">Monitor</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Follow-Up Required: <span class="required-field">*</span></label>
+                            <select id="job_followup_required" required>
+                                <option value="">Select...</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Field Status Notes:</label>
+                        <textarea id="job_filed_status_notes" placeholder="Additional status information"></textarea>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Device Name: <span class="required-field">*</span></label>
+                        <textarea id="deviceName" placeholder="Enter device name or identifier" required></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Device Type:</label>
+                        <select id="deviceType">
+                            <option value="">Select...</option>
+                            <option value="Reader">Reader</option>
+                            <option value="Door Contact">Door Contact</option>
+                            <option value="SAR">SAR</option>
+                            <option value="Mag Hold">Mag Hold</option>
+                            <option value="ADA/Opener">ADA/Opener</option>
+                            <option value="Wave Sensor">Wave Sensor</option>
+                            <option value="REX/EDR">REX/EDR</option>
+                            <option value="Hinge">Hinge</option>
+                            <option value="Crash Bar">Crash Bar</option>
+                            <option value="Signal Light/Sounder">Signal Light/Sounder</option>
+                            <option value="Cassette">Cassette</option>
+                            <option value="Camera">Camera</option>
+                            <option value="Encoder">Encoder</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Device Details:</label>
+                        <textarea id="job_device_details" placeholder="Additional device information"></textarea>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Trouble Type:</label>
+                        <select id="job_trouble_type">
+                            <option value="">Select...</option>
+                            <option value="malfunction">Malfunction</option>
+                            <option value="DFO">DFO</option>
+                            <option value="line error">Line Error</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Trouble Description: <span class="required-field">*</span></label>
+                        <textarea id="job_trouble_description" placeholder="Describe the problem or issue" required></textarea>
+                    </div>
+                    
+                    <div class="spacer"></div>
+                    
+                    <div class="form-row">
+                        <label>Work Description: <span class="required-field">*</span></label>
+                        <textarea id="job_work_description" placeholder="Describe the work performed" required></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Technical Details:</label>
+                        <div class="technical-details-container">
+                            <select id="technicalDetailsDropdown" onchange="addTechnicalDetails()">
+                                <option value="">Add...</option>
+                                <option value="reader">Reader</option>
+                                <option value="door">Door</option>
+                                <option value="lock">Lock</option>
+                                <option value="rex">Rex</option>
+                            </select>
+                            <textarea id="job_technical_details" placeholder="Technical details and specifications"></textarea>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="form-buttons">
+                    <button class="btn-save" onclick="saveCurrentJob()">Save</button>
+                    <button class="btn-load" onclick="loadJob()">Load</button>
+                    <button class="btn-edit" onclick="editJob()">Edit</button>
+                    <button class="btn-export" onclick="exportJob()">Export</button>
+                    <button class="btn-copy" onclick="copyToClipboard()">Copy to Clipboard</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jobs List Section -->
+        <div class="jobs-list-section">
+            <div class="section">
+                <h2>Jobs List</h2>
+                <div id="jobsList"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Calendar</h2>
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Jobs Section -->
+    <div class="section">
+        <h2>Daily Jobs
+            <div class="header-buttons">
+                <button class="btn-load" onclick="importJobs()">Import JSON</button>
+                <button class="btn-export" onclick="exportAllJobs()">Export All</button>
+                <button class="btn-copy" onclick="copyAllToClipboard()">Copy All to Clipboard</button>
+            </div>
+        </h2>
+        <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
+        <div id="dailyJobs"></div>
+    </div>
+
+    <script>
+        let jobs = JSON.parse(localStorage.getItem('serviceLogJobs') || '[]');
+        let currentJobId = null;
+
+        const requiredFields = ['job_reference_number', 'job_name', 'job_start_date', 'job_start_time', 'job_end_time', 'job_field_status', 'job_followup_required', 'deviceName', 'job_trouble_description', 'job_work_description'];
+
+        const technicalDetailsTemplates = {
+            reader: `[Reader]
+Voltage to Reader: - metered at reader
+HID or SafeTrust:
+Card Reader Info: Type, Spacer?
+V3 or V4 module
+SafeTrust Info: Firmware & Dr#
+Single-Drop or Multi-Drop:`,
+            door: `[Door]
+Fail safe or Fail Secure
+Single Door or Double Door
+Locking hardware: Schlage cassette or Corbin Russwin Cassette or Von Duprin crash bar
+Type of hinge: 4.5" center wire, 5" offset wire or? DC: ¾ or 1", Magnasphere or GRI`,
+            lock: `[Lock]
+Voltage to lock: - metered at frame side of hinge`,
+            rex: `[Rex]
+Voltage to REX: - metered at frame side of hinge
+REX Resistance: - metered at frame side of hinge and as close/ direct to REX. I.E. OL, 16-23Ω Solid`
+        };
+
+        function addTechnicalDetails() {
+            const dropdown = document.getElementById('technicalDetailsDropdown');
+            const textarea = document.getElementById('job_technical_details');
+            
+            if (dropdown.value && technicalDetailsTemplates[dropdown.value]) {
+                const currentText = textarea.value;
+                const newText = currentText ? currentText + '\n\n' + technicalDetailsTemplates[dropdown.value] : technicalDetailsTemplates[dropdown.value];
+                textarea.value = newText;
+                dropdown.value = '';
+            }
+        }
+
+        function validateRequiredFields(jobData = null) {
+            const data = jobData || getCurrentJobData();
+            const missingFields = [];
+            
+            requiredFields.forEach(field => {
+                if (!data[field] || data[field].trim() === '') {
+                    missingFields.push(field);
+                }
+            });
+            
+            return missingFields;
+        }
+
+        function highlightRequiredFields() {
+            const currentData = getCurrentJobData();
+            const missingFields = validateRequiredFields(currentData);
+            
+            requiredFields.forEach(field => {
+                const element = document.getElementById(field);
+                if (element) {
+                    if (missingFields.includes(field)) {
+                        element.classList.add('required-empty');
+                    } else {
+                        element.classList.remove('required-empty');
+                    }
+                }
+            });
+        }
+
+        function getCurrentJobData() {
+            const formData = {};
+            const form = document.getElementById('jobForm');
+            const inputs = form.querySelectorAll('input, select, textarea');
+            
+            inputs.forEach(input => {
+                formData[input.id] = input.value;
+            });
+            
+            return formData;
+        }
+
+        function populateForm(jobData) {
+            document.getElementById('jobForm').reset();
+            currentJobId = jobData.id;
+            Object.keys(jobData).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    element.value = jobData[key] || '';
+                    if (element.tagName === 'TEXTAREA') {
+                        element.style.height = 'auto';
+                        element.style.height = element.scrollHeight + 'px';
+                    }
+                }
+            });
+            highlightRequiredFields();
+        }
+
+        function clearForm() {
+            document.getElementById('jobForm').reset();
+            currentJobId = null;
+            highlightRequiredFields();
+            updateJobsList();
+        }
+
+        function createNewJob() {
+            saveCurrentJob();
+            clearForm();
+            updateDisplays();
+        }
+
+        function saveCurrentJob() {
+            const jobData = getCurrentJobData();
+            
+            if (currentJobId !== null) {
+                const index = jobs.findIndex(job => job.id === currentJobId);
+                if (index !== -1) {
+                    jobs[index] = { ...jobData, id: currentJobId };
+                }
+            } else {
+                const newJob = { ...jobData, id: Date.now(), job_start_date: jobData.job_start_date || new Date().toISOString().split('T')[0] };
+                jobs.push(newJob);
+                currentJobId = newJob.id;
+            }
+            
+            localStorage.setItem('serviceLogJobs', JSON.stringify(jobs));
+            updateJobSummary();
+            updateJobsList();
+            updateDailyJobs();
+            updateCalendar();
+            highlightRequiredFields();
+        }
+
+        function loadJobById(jobId) {
+            const job = jobs.find(j => j.id === jobId);
+            if (job) {
+                populateForm(job);
+                updateDisplays();
+            }
+        }
+
+        function updateJobSummary() {
+            const summaryDiv = document.getElementById('jobSummary');
+            const today = new Date().toISOString().split('T')[0];
+            const todayJobs = jobs.filter(job => job.job_start_date === today);
+            
+            if (jobs.length === 0) {
+                summaryDiv.innerHTML = '<p>No jobs available.</p>';
+                return;
+            }
+            
+            if (todayJobs.length === 0) {
+                summaryDiv.innerHTML = '<p>No jobs for today.</p>';
+                return;
+            }
+            
+            const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            const withPeople = [...new Set(todayJobs.filter(job => job.job_with_who && job.job_with_who.trim()).map(job => job.job_with_who.trim()))];
+            
+            let summaryHTML = `<div class="job-summary-item">`;
+            summaryHTML += `<strong>[${today}] - ${dayName}</strong><br>`;
+            summaryHTML += `hr. 8<br>`;
+            if (withPeople.length > 0) {
+                summaryHTML += `With: ${withPeople.join(', ')}<br>`;
+            }
+            
+            todayJobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.id;
+                let className = '';
+                if (!hasRequired) className += 'missing-required ';
+                if (isCurrent) className += 'current-job';
+                const status = job.job_field_status ? ` - ${job.job_field_status}` : '';
+                summaryHTML += `<div class="${className}">${job.job_name || 'Unnamed Job'}${status}</div>`;
+            });
+            
+            summaryHTML += `</div>`;
+            summaryDiv.innerHTML = summaryHTML;
+        }
+
+        function updateJobsList() {
+            const jobsListDiv = document.getElementById('jobsList');
+            let listHTML = '';
+            
+            jobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.id;
+                let className = 'job-link';
+                if (!hasRequired) className += ' missing-required';
+                if (isCurrent) className += ' current-job';
+                listHTML += `<div style="display: flex; align-items: center; margin: 5px 0;">
+                    <a href="#" class="${className}" onclick="loadJobById(${job.id}); return false;" style="flex: 1; margin: 0;">
+                        ${job.job_name || 'Unnamed Job'}
+                    </a>
+                    <button onclick="deleteJob(${job.id})" style="background: #dc3545; color: white; border: none; padding: 4px 8px; margin-left: 5px; border-radius: 3px; cursor: pointer;">X</button>
+                </div>`;
+            });
+            
+            jobsListDiv.innerHTML = listHTML || '<p>No jobs available.</p>';
+        }
+
+        function deleteJob(jobId) {
+            const job = jobs.find(j => j.id === jobId);
+            if (job && confirm(`Delete job "${job.job_name || 'Unnamed Job'}"?`)) {
+                jobs = jobs.filter(j => j.id !== jobId);
+                if (currentJobId === jobId) {
+                    clearForm();
+                }
+                localStorage.setItem('serviceLogJobs', JSON.stringify(jobs));
+                updateDisplays();
+            }
+        }
+
+        function updateDailyJobs() {
+            const dailyJobsDiv = document.getElementById('dailyJobs');
+            let dailyHTML = '';
+            
+            jobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.id;
+                let className = 'daily-job-box';
+                if (!hasRequired) className += ' missing-required';
+                if (isCurrent) className += ' current-job';
+                
+                dailyHTML += `<div class="${className}">`;
+                dailyHTML += `<strong>Job: ${job.job_name || 'Unnamed Job'}</strong><br>`;
+                dailyHTML += `Number: ${job.job_reference_number || 'N/A'}<br>`;
+                dailyHTML += `Date: ${job.job_start_date || 'N/A'} | ${job.job_start_time || 'N/A'} - ${job.job_end_time || 'N/A'}<br>`;
+                dailyHTML += `Status: ${job.job_field_status || 'N/A'}<br>`;
+                dailyHTML += `Device: ${job.deviceName || 'N/A'} (${job.deviceType || 'N/A'})<br>`;
+                if (job.job_trouble_description) {
+                    dailyHTML += `Problem: ${job.job_trouble_description}<br>`;
+                }
+                if (job.job_work_description) {
+                    dailyHTML += `Work: ${job.job_work_description}<br>`;
+                }
+                dailyHTML += `</div>`;
+            });
+            
+            dailyJobsDiv.innerHTML = dailyHTML || '<p>No daily jobs to display.</p>';
+        }
+
+        function updateCalendar() {
+            const calendarDiv = document.getElementById('calendar');
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const lastDay = new Date(currentYear, currentMonth + 1, 0);
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - firstDay.getDay());
+            
+            let calendarHTML = '';
+            
+            // Day headers
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayNames.forEach(day => {
+                calendarHTML += `<div class="calendar-day-header">${day}</div>`;
+            });
+            
+            // Calendar days
+            for (let i = 0; i < 42; i++) {
+                const date = new Date(startDate);
+                date.setDate(startDate.getDate() + i);
+                const dateStr = date.toISOString().split('T')[0];
+                const dayJobs = jobs.filter(job => job.job_start_date === dateStr);
+                
+                calendarHTML += `<div class="calendar-day">`;
+                calendarHTML += `<div class="calendar-day-number">${date.getDate()}</div>`;
+                
+                dayJobs.forEach(job => {
+                    const missingFields = validateRequiredFields(job);
+                    const hasRequired = missingFields.length === 0;
+                    const className = hasRequired ? 'calendar-job' : 'calendar-job missing-required';
+                    const displayText = `${job.building || 'N/A'} - ${job.job_reference_number || 'N/A'}`;
+                    calendarHTML += `<div class="${className}" onclick="loadJobById(${job.id})">${displayText}</div>`;
+                });
+                
+                calendarHTML += `</div>`;
+            }
+            
+            calendarDiv.innerHTML = `<div class="calendar">${calendarHTML}</div>`;
+        }
+
+        function updateDisplays() {
+            updateJobSummary();
+            updateJobsList();
+            updateDailyJobs();
+            updateCalendar();
+        }
+
+        function loadJob() {
+            if (jobs.length > 0) {
+                loadJobById(jobs[0].id);
+            }
+        }
+
+        function editJob() {
+            alert('Job is ready for editing in the form above.');
+        }
+
+        function exportJob() {
+            const jobData = getCurrentJobData();
+            const dataStr = JSON.stringify(jobData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `job_${jobData.job_name || 'unnamed'}_${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function copyToClipboard() {
+            const jobData = getCurrentJobData();
+            let text = `Job Name: ${jobData.job_name || ''}\n`;
+            text += `Job Reference Number: ${jobData.job_reference_number || ''}\n\n`;
+            text += `Escort Delay: ${jobData.job_escort_delay || ''}\n`;
+            text += `Start: ${jobData.job_start_time || ''}\n`;
+            text += `End: ${jobData.job_end_time || ''}\n`;
+            text += `With: ${jobData.job_with_who || ''}\n`;
+            text += ` \n`;
+            text += `Materials Used: ${jobData.job_materials_used || ''}\n`;
+            text += `Materials Needed: ${jobData.job_materials_needed || ''}\n`;
+            text += ` \n`;
+            text += `Hindrances: ${jobData.job_hindrances || ''}\n`;
+            text += `Access Needed: ${jobData.job_access_needed || ''}\n`;
+            text += `Programming Changes: ${jobData.job_programming_changes || ''}\n`;
+            text += ` \n`;
+            text += `Dispatch Type: ${jobData.job_dispatch_type || ''}\n`;
+            text += `Field Status: ${jobData.job_field_status || ''}\n`;
+            text += `Status Notes: ${jobData.job_filed_status_notes || ''}\n`;
+            text += ` \n`;
+            text += `Device Name: ${jobData.deviceName || ''}\n`;
+            text += `Trouble Description: ${jobData.job_trouble_description || ''}\n`;
+            text += `Trouble Type: ${jobData.job_trouble_type || ''}\n`;
+            text += `Device Details: ${jobData.job_device_details || ''}\n`;
+            text += ` \n`;
+            text += `Related Tickets: ${jobData.relatedTickets || ''}\n`;
+            text += ` \n`;
+            text += `Work Description: ${jobData.job_work_description || ''}\n`;
+            text += ` \n`;
+            text += `Technical Details: ${jobData.job_technical_details || ''}\n`;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Job copied to clipboard!');
+            });
+        }
+
+        function importJobs() {
+            document.getElementById('jsonFileInput').click();
+        }
+
+        function exportAllJobs() {
+            const dataStr = JSON.stringify(jobs, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `all_jobs_${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function copyAllToClipboard() {
+            let allJobsText = '';
+            jobs.forEach(job => {
+                allJobsText += `Job: ${job.job_name || 'Unnamed Job'}\n`;
+                allJobsText += `Number: ${job.job_reference_number || 'N/A'}\n`;
+                allJobsText += `Date: ${job.job_start_date || 'N/A'}\n`;
+                allJobsText += `Time: ${job.job_start_time || 'N/A'} - ${job.job_end_time || 'N/A'}\n`;
+                allJobsText += `Status: ${job.job_field_status || 'N/A'}\n`;
+                allJobsText += `Device: ${job.deviceName || 'N/A'}\n`;
+                allJobsText += `Problem: ${job.job_trouble_description || 'N/A'}\n`;
+                allJobsText += `Work: ${job.job_work_description || 'N/A'}\n`;
+                allJobsText += '---\n\n';
+            });
+            
+            navigator.clipboard.writeText(allJobsText).then(() => {
+                alert('All jobs copied to clipboard!');
+            });
+        }
+
+        function copySummaryToClipboard() {
+            const summaryDiv = document.getElementById('jobSummary');
+            const summaryText = summaryDiv.innerText || summaryDiv.textContent;
+            
+            navigator.clipboard.writeText(summaryText).then(() => {
+                alert('Job summary copied to clipboard!');
+            });
+        }
+
+        function populateFromEmail(emailData) {
+            console.log('=== POPULATE FORM DEBUG ===');
+            console.log('Email data received:', emailData);
+            
+            if (emailData.jobNumber) {
+                console.log('Setting job_reference_number:', emailData.jobNumber);
+                document.getElementById('job_reference_number').value = emailData.jobNumber;
+            }
+            if (emailData.address) {
+                console.log('Setting address:', emailData.address);
+                document.getElementById('address').value = emailData.address;
+            }
+            if (emailData.jobName) {
+                console.log('Setting job_name:', emailData.jobName);
+                document.getElementById('job_name').value = emailData.jobName;
+            }
+            if (emailData.deviceName) {
+                console.log('Setting deviceName:', emailData.deviceName);
+                document.getElementById('deviceName').value = emailData.deviceName;
+            }
+            if (emailData.problemDescription) {
+                console.log('Setting job_trouble_description:', emailData.problemDescription);
+                document.getElementById('job_trouble_description').value = emailData.problemDescription;
+            }
+            if (emailData.building) {
+                console.log('Setting building:', emailData.building);
+                document.getElementById('building').value = emailData.building;
+            }
+            
+            highlightRequiredFields();
+            updateDisplays();
+        }
+
+        function showImportStatus(message, isError = false) {
+            const statusDiv = document.getElementById('importStatus');
+            statusDiv.innerHTML = `<div class="import-status ${isError ? 'import-error' : 'import-success'}">${message}</div>`;
+            setTimeout(() => statusDiv.innerHTML = '', 3000);
+        }
+
+        function handleFiles(files) {
+            console.log('=== FILE HANDLING DEBUG ===');
+            console.log('Files received:', files.length);
+            
+            Array.from(files).forEach(file => {
+                console.log('Processing file:', file.name, 'Size:', file.size);
+                const reader = new FileReader();
+                
+                if (file.name.toLowerCase().endsWith('.eml')) {
+                    reader.onload = (e) => {
+                        console.log('EML file loaded, content length:', e.target.result.length);
+                        const emailData = EmailParser.parseEml(e.target.result);
+                        console.log('Parsed email data:', emailData);
+                        processEmailData(emailData, file.name);
+                    };
+                    reader.readAsText(file);
+                } else if (file.name.toLowerCase().endsWith('.msg')) {
+                    reader.onload = (e) => {
+                        console.log('MSG file loaded, buffer length:', e.target.result.byteLength);
+                        const emailData = EmailParser.parseMsg(e.target.result);
+                        console.log('Parsed email data:', emailData);
+                        processEmailData(emailData, file.name);
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    showImportStatus(`Unsupported file: ${file.name}`, true);
+                }
+            });
+        }
+
+        function processEmailData(emailData, fileName) {
+            const existingJob = jobs.find(job => 
+                job.job_name === emailData.jobName || 
+                (job.job_reference_number && emailData.jobNumber && job.job_reference_number === emailData.jobNumber)
+            );
+            
+            if (existingJob) {
+                showImportStatus(`Job already exists: ${fileName}`, true);
+                return;
+            }
+            
+            const newJob = { ...emailData, id: Date.now(), job_start_date: new Date().toISOString().split('T')[0] };
+            jobs.push(newJob);
+            localStorage.setItem('serviceLogJobs', JSON.stringify(jobs));
+            updateDisplays();
+            showImportStatus(`New job created: ${fileName}`);
+        }
+
+        // Event listeners for real-time validation
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('jobForm');
+            const inputs = form.querySelectorAll('input, select, textarea');
+            
+            inputs.forEach(input => {
+                input.addEventListener('input', highlightRequiredFields);
+                input.addEventListener('change', highlightRequiredFields);
+                
+                if (input.tagName === 'TEXTAREA') {
+                    input.addEventListener('input', function() {
+                        this.style.height = 'auto';
+                        this.style.height = this.scrollHeight + 'px';
+                    });
+                }
+            });
+            
+            // Set today's date as default
+            document.getElementById('job_start_date').value = new Date().toISOString().split('T')[0];
+            
+            // Drag and drop setup
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+            
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+            
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+            
+            // JSON import setup
+            const jsonFileInput = document.getElementById('jsonFileInput');
+            jsonFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && file.name.toLowerCase().endsWith('.json')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const importedJobs = JSON.parse(event.target.result);
+                            jobs = importedJobs;
+                            localStorage.setItem('serviceLogJobs', JSON.stringify(jobs));
+                            updateDisplays();
+                            alert(`Imported ${jobs.length} jobs successfully!`);
+                            if (jobs.length > 0) {
+                                loadJobById(jobs[0].id);
+                            }
+                        } catch (error) {
+                            alert('Error importing JSON file: ' + error.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            });
+            
+            updateDisplays();
+            highlightRequiredFields();
+            
+            // Auto-load first job or create new one
+            if (jobs.length > 0) {
+                loadJobById(jobs[0].id);
+            } else {
+                saveCurrentJob();
+            }
+        });
+    </script>
+</body>
+</html>

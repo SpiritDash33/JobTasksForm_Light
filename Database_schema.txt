@@ -1,0 +1,442 @@
+```sql
+-- Enable pgcrypto for encryption of sensitive data (e.g., user_name, job details)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Users table: Stores user info, preferences, and authentication details
+-- Supports login, profile widgets, and preferences for light/dark mode, notifications
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique user ID, Type: UUID, Primary Key
+    user_name VARCHAR(255) NOT NULL, -- User's full name (encrypted in app), Type: string, Friendly name: User Name
+    user_alias VARCHAR(255), -- Optional display name (encrypted), Type: string, Friendly name: Alias
+    user_email VARCHAR(255) NOT NULL UNIQUE, -- Email for login/verification (encrypted), Type: string, Friendly name: Email
+    user_preferred_color VARCHAR(50), -- For UI customization (e.g., hex code), Type: string, Friendly name: Preferred Color
+    user_preferred_landing_page VARCHAR(255), -- Default page after login, Type: string, Friendly name: Home Page
+    user_preferred_profile_picture TEXT, -- Path/URL for profile picture (PictureBox widget), Type: text, Friendly name: Profile Picture
+    user_preferred_light_or_dark_mode_mobile VARCHAR(10) DEFAULT 'dark', -- Mobile theme, Type: string, Friendly name: Light/Dark Mode (Mobile), Default: dark
+    user_preferred_light_or_dark_mode_desktop VARCHAR(10) DEFAULT 'light', -- Desktop theme, Type: string, Friendly name: Light/Dark Mode (Desktop), Default: light
+    user_preferred_enable_alerts JSONB, -- Notification preferences (e.g., {"email": true, "push": false, "sms": true}), Type: JSON, Friendly name: Receive Alerts
+    user_preferred_enable_notifications JSONB, -- Similar for alerts, Type: JSON, Friendly name: Receive Notifications
+    user_is_admin BOOLEAN DEFAULT FALSE, -- Admin access for admin pages, Type: boolean, Friendly name: Admin
+    user_is_manager BOOLEAN DEFAULT FALSE, -- Manager access for management pages, Type: boolean, Friendly name: Manager
+    user_is_email_verified BOOLEAN DEFAULT FALSE, -- For future email verification, Type: boolean, Friendly name: Verified
+    user_preferred_timezone VARCHAR(50) DEFAULT 'America/Los_Angeles' CHECK (user_preferred_timezone IN (SELECT name FROM pg_timezone_names)), -- Timezone for dates, Type: string, Friendly name: Timezone, Default: America/Los_Angeles, Validated against pg_timezone_names
+    user_agreed_to_terms BOOLEAN DEFAULT FALSE, -- Tracks agreement to terms and conditions, Type: boolean
+    password_hash VARCHAR(255) NOT NULL, -- Hashed password, Type: string
+    oauth_provider VARCHAR(50), -- For OAuth (e.g., 'google', 'microsoft'), Type: string
+    oauth_id VARCHAR(255), -- OAuth identifier, Type: string
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Creation timestamp, Type: timestamp
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Last updated timestamp, Type: timestamp
+);
+
+-- Email_verification_tokens table: Stores tokens for email verification
+CREATE TABLE email_verification_tokens (
+    token_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique token ID, Type: UUID
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- Links to user, Type: UUID, FK to users.user_id
+    token VARCHAR(255) NOT NULL UNIQUE, -- Verification token, Type: string
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Creation timestamp, Type: timestamp
+    expires_at TIMESTAMP NOT NULL -- Expiry timestamp, Type: timestamp
+);
+
+-- User_sessions table: Tracks active user sessions (max 3 per user, enforced in app)
+-- Supports multi-device login and 24-hour inactivity timeout
+CREATE TABLE user_sessions (
+    session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique session ID, Type: UUID
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- Links to user, Type: UUID, FK to users.user_id. Required.
+    login_origin VARCHAR(255) NOT NULL, -- Source (e.g., 'web', 'iOS'), Type: string, Required
+    token VARCHAR(512) NOT NULL UNIQUE, -- Session token (e.g., JWT, encrypted), Type: string
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Session start time, Type: timestamp
+    expires_at TIMESTAMP NOT NULL, -- Session expiry (e.g., 24 hours), Type: timestamp
+    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Last activity, Type: timestamp
+    is_active BOOLEAN DEFAULT FALSE, -- Active only when login_origin is active, Type: bool
+    device_info VARCHAR(255), -- Device details (e.g., 'iPhone 14'), Type: string
+    ip_address VARCHAR(45) -- For security tracking, Type: string
+);
+
+-- Login_attempts table: Logs login attempts for rate-limiting brute-force attacks
+CREATE TABLE login_attempts (
+    attempt_id SERIAL PRIMARY KEY, -- Unique attempt ID, Type: serial, PK, auto-increment
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- User, if known, Type: UUID
+    email VARCHAR(255), -- Attempted email, Type: string
+    ip_address VARCHAR(45) NOT NULL, -- Source IP, Type: string
+    login_origin VARCHAR(255), -- Source (e.g., 'web'), Type: string
+    success BOOLEAN NOT NULL, -- True if login succeeded, Type: bool
+    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Timestamp of attempt, Type: timestamp
+);
+
+-- Groups table: Defines team roles (field, manager, admin)
+CREATE TABLE groups (
+    group_id SERIAL PRIMARY KEY, -- Unique group ID, Type: serial, Primary key
+    group_name VARCHAR(50) NOT NULL UNIQUE -- Role name (e.g., 'field', 'manager', 'admin'), Type: string
+);
+
+-- User_groups table: Links users to groups (many-to-many)
+CREATE TABLE user_groups (
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- User ID, Type: UUID
+    group_id INTEGER NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE, -- Group ID, Type: INTEGER
+    PRIMARY KEY (user_id, group_id) -- Composite key
+);
+
+-- Buildings table: Lookup for building IDs used in jobs, globally unique
+CREATE TABLE buildings (
+    building_id SERIAL PRIMARY KEY, -- Unique building ID, Type: serial
+    building_uuid UUID UNIQUE DEFAULT gen_random_uuid(), -- Globally unique identifier for external APIs/integrations, Type: UUID
+    building_name VARCHAR(255) NOT NULL, -- Building name, Type: string
+    description TEXT -- Optional details (encrypted in app), Type: text
+);
+
+-- Devices table: Lookup for device IDs/names used in jobs, globally unique and tied to one building
+CREATE TABLE devices (
+    device_id SERIAL PRIMARY KEY, -- Unique device ID, Type: serial
+    device_uuid UUID UNIQUE DEFAULT gen_random_uuid(), -- Globally unique identifier for external APIs/integrations, Type: UUID
+    building_id INTEGER NOT NULL REFERENCES buildings(building_id) ON DELETE RESTRICT, -- Links to building, Type: integer, FK to buildings.building_id
+    device_name VARCHAR(255) NOT NULL, -- Device name, Type: string
+    device_type VARCHAR(50), -- Device type (e.g., 'sensor'), Type: string
+    description TEXT, -- Optional details (encrypted in app), Type: text
+    CONSTRAINT unique_device_name_per_building UNIQUE (building_id, device_name) -- Ensures device names are unique within a building
+);
+
+-- Tickets table: Stores unique ticket numbers (one ticket to many ticket_entries), each tied to one building
+CREATE TABLE tickets (
+    ticket_id SERIAL PRIMARY KEY, -- Unique ticket ID, Type: serial
+    ticket_number VARCHAR(50) NOT NULL UNIQUE, -- Globally unique ticket number (e.g., 'TICKET-123'), Type: string
+    building_id INTEGER NOT NULL REFERENCES buildings(building_id) ON DELETE RESTRICT, -- Links to building, Type: integer, Friendly name: Building ID
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Creation timestamp, Type: timestamp
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Last updated timestamp, Type: timestamp
+    deleted_at TIMESTAMP -- Soft deletion timestamp, Type: timestamp
+);
+
+-- Ticket_entries table: Stores job/ticket data for EditUserJob/ViewUserJob widgets
+-- Links to tickets via ticket_id (one ticket_number to many entries)
+CREATE TABLE ticket_entries (
+    entry_id SERIAL PRIMARY KEY, -- Unique job ID, Type: serial
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- Creator user, Type: UUID
+    ticket_id INTEGER NOT NULL REFERENCES tickets(ticket_id) ON DELETE RESTRICT, -- Links to ticket, Type: integer
+    job_name VARCHAR(255) NOT NULL, -- Job title (encrypted), Type: string, Friendly name: Job Name, Requirement: required, Triggers Alert: no
+    job_start_date DATE NOT NULL, -- Start date (for CalendarSelectBox), Type: date, Friendly name: Start Date, Requirement: required, Triggers Alert: no
+    job_start_time TIME NOT NULL, -- Start time (for TimeSelectBox), Type: time, Friendly name: Start Time, Requirement: required, Triggers Alert: no
+    job_end_time TIME NOT NULL, -- End time, Type: time, Friendly name: End Time, Requirement: required, Triggers Alert: no
+    job_with_who VARCHAR(255), -- Collaborators, Type: string, Friendly name: With, Requirement: optional, Triggers Alert: no
+    job_reference_number VARCHAR(50), -- Reference number, Type: string, Friendly name: Ref#, Requirement: optional, Triggers Alert: no
+    job_escort_delay TIME, -- Delay time, Type: time, Friendly name: Escort Delay, Requirement: optional, Triggers Alert: no
+    job_hindrances TEXT, -- Issues encountered (encrypted), Type: text, Friendly name: Hindrances, Requirement: optional, Triggers Alert: no
+    job_materials_used TEXT, -- Materials used (encrypted), Type: text, Friendly name: Materials Used, Requirement: optional, Triggers Alert: no
+    job_materials_needed TEXT, -- Materials needed (triggers alert if non-null, encrypted), Type: text, Friendly name: Materials Needed, Requirement: optional, Triggers Alert: yes
+    job_access_needed TEXT, -- Access requirements (triggers alert if non-null, encrypted), Type: text, Friendly name: Access Needed, Requirement: optional, Triggers Alert: yes
+    job_programming_changes TEXT, -- Programming changes (triggers alert if non-null, encrypted), Type: text, Friendly name: Programming Changes, Requirement: optional, Triggers Alert: yes
+    job_dispatch_type VARCHAR(50) NOT NULL, -- Dispatch type, Type: string, Friendly name: Dispatch Type, Requirement: required, Triggers Alert: no
+    job_field_status VARCHAR(50) NOT NULL, -- Field status, Type: string, Friendly name: Field Status, Requirement: required, Triggers Alert: no
+    job_filed_status_notes TEXT, -- Additional notes (encrypted), Type: text, Friendly name: Field Notes, Requirement: suggested, Triggers Alert: no
+    job_followup_required BOOLEAN NOT NULL, -- Follow-up needed (triggers alert if true), Type: boolean, Friendly name: Follow-Up Required, Requirement: required, Triggers Alert: yes
+    job_device_details TEXT, -- Device details (encrypted), Type: text, Friendly name: Device Details, Requirement: optional, Triggers Alert: no
+    job_trouble_type VARCHAR(50) NOT NULL, -- Trouble type, Type: string, Friendly name: Trouble Type, Requirement: required, Triggers Alert: no
+    job_trouble_description TEXT NOT NULL, -- Trouble description (encrypted), Type: text, Friendly name: Trouble Description, Requirement: required, Triggers Alert: no
+    job_work_description TEXT NOT NULL, -- Work description (encrypted), Type: text, Friendly name: Work Description, Requirement: required, Triggers Alert: no
+    job_technical_details TEXT, -- Technical notes (encrypted), Type: text, Friendly name: Technical Details, Requirement: suggested, Triggers Alert: no
+    job_changed_flag BOOLEAN DEFAULT FALSE, -- Indicates if job entry was changed, Type: boolean, Friendly name: Changed Flag
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Creation timestamp, Type: timestamp
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Last updated timestamp, Type: timestamp
+    deleted_at TIMESTAMP -- Soft deletion timestamp, Type: timestamp
+);
+
+-- Trigger to create alerts for ticket_entries
+CREATE OR REPLACE FUNCTION create_alert_on_ticket_entry() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.job_materials_needed IS NOT NULL THEN
+        INSERT INTO alerts (entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.entry_id, 'job-related', 'medium', 'job_materials_needed', 'Materials needed for job', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_access_needed IS NOT NULL THEN
+        INSERT INTO alerts (entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.entry_id, 'job-related', 'medium', 'job_access_needed', 'Access needed for job', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_programming_changes IS NOT NULL THEN
+        INSERT INTO alerts (entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.entry_id, 'job-related', 'medium', 'job_programming_changes', 'Programming changes required', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_followup_required = TRUE THEN
+        INSERT INTO alerts (entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.entry_id, 'job-related', 'high', 'job_followup_required', 'Follow-up required for job', CURRENT_TIMESTAMP);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER ticket_entry_alert_trigger
+    AFTER INSERT OR UPDATE ON ticket_entries
+    FOR EACH ROW EXECUTE FUNCTION create_alert_on_ticket_entry();
+
+-- Ticket_entry_devices table: Junction table for many-to-many relationship between ticket_entries and devices
+CREATE TABLE ticket_entry_devices (
+    entry_id INTEGER NOT NULL REFERENCES ticket_entries(entry_id) ON DELETE CASCADE, -- Links to job entry, Type: integer
+    device_id INTEGER NOT NULL REFERENCES devices(device_id) ON DELETE RESTRICT, -- Links to device, Type: integer
+    PRIMARY KEY (entry_id, device_id) -- Composite key
+);
+
+-- Trigger to ensure device building_id matches ticket building_id
+CREATE OR REPLACE FUNCTION check_ticket_entry_device_building() RETURNS TRIGGER AS $$
+BEGIN
+    IF (SELECT t.building_id FROM tickets t JOIN ticket_entries te ON t.ticket_id = te.ticket_id WHERE te.entry_id = NEW.entry_id) !=
+       (SELECT building_id FROM devices WHERE device_id = NEW.device_id) THEN
+        RAISE EXCEPTION 'Device building_id must match ticket building_id';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER ticket_entry_device_building_check
+    BEFORE INSERT OR UPDATE ON ticket_entry_devices
+    FOR EACH ROW EXECUTE FUNCTION check_ticket_entry_device_building();
+
+-- Ticket_misc_entries table: Stores miscellaneous tasks for EditUserTask/ViewUserTask
+CREATE TABLE ticket_misc_entries (
+    entry_id SERIAL PRIMARY KEY, -- Unique task ID, Type: serial
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- Creator user, Type: UUID
+    misc_name VARCHAR(255) NOT NULL, -- Task name (encrypted), Type: string, Friendly name: Task Name, Requirement: required, Triggers Alert: no
+    misc_start_date DATE NOT NULL, -- Start date, Type: date, Friendly name: Start Date, Requirement: required, Triggers Alert: no
+    misc_start_time TIME NOT NULL, -- Start time, Type: time, Friendly name: Start Time, Requirement: required, Triggers Alert: no
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Creation timestamp, Type: timestamp
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Last updated timestamp, Type: timestamp
+    deleted_at TIMESTAMP -- Soft deletion timestamp, Type: timestamp
+);
+
+-- Notifications table: Stores notifications for users, groups, or globally
+CREATE TABLE notifications (
+    notification_id SERIAL PRIMARY KEY, -- Unique notification ID, Type: serial
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- Target user (null for global/group), Type: UUID
+    group_id INTEGER REFERENCES groups(group_id) ON DELETE SET NULL, -- Target group, Type: INTEGER
+    title VARCHAR(255) NOT NULL, -- Notification title, Type: string
+    message TEXT NOT NULL, -- Notification content (encrypted), Type: text
+    is_read BOOLEAN DEFAULT FALSE, -- Read status, Type: bool
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Creation timestamp, Type: timestamp
+);
+
+-- View to enforce notification limits (5 non-critical alerts per day per user)
+CREATE VIEW daily_alert_counts AS
+SELECT user_id, DATE(created_at) AS alert_date, COUNT(*) AS alert_count
+FROM alerts
+WHERE alert_type != 'critical'
+GROUP BY user_id, DATE(created_at);
+
+-- Alerts table: Stores urgent alerts triggered by various events
+CREATE TABLE alerts (
+    alert_id SERIAL PRIMARY KEY, -- Unique alert ID, Type: serial
+    entry_id INTEGER REFERENCES ticket_entries(entry_id) ON DELETE CASCADE, -- Related job (optional for non-job alerts), Type: INTEGER
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- Target user (optional for group/global), Type: UUID
+    group_id INTEGER REFERENCES groups(group_id) ON DELETE SET NULL, -- Target group (optional), Type: INTEGER
+    alert_type VARCHAR(50) NOT NULL, -- Type (e.g., 'job-related', 'security', 'system', 'site-wide'), Type: string
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')), -- Severity level, Type: enum
+    trigger_field VARCHAR(50), -- Field causing alert (optional, e.g., 'job_materials_needed'), Type: string
+    message TEXT NOT NULL, -- Alert message (encrypted), Type: text
+    is_resolved BOOLEAN DEFAULT FALSE, -- Resolution status, Type: bool
+    resolved_by UUID REFERENCES users(user_id) ON DELETE SET NULL, -- User who resolved (optional), Type: UUID
+    resolved_at TIMESTAMP, -- Resolution timestamp, Type: timestamp
+    escalation_level VARCHAR(20) DEFAULT 'initial' CHECK (escalation_level IN ('initial', 'escalated', 'critical')), -- Tracks escalation status, Type: string
+    last_escalated_at TIMESTAMP, -- Timestamp of last escalation, Type: timestamp
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Creation timestamp, Type: timestamp
+);
+
+-- Alert_acknowledgments table: Tracks user acknowledgments of alerts
+CREATE TABLE alert_acknowledgments (
+    alert_id INTEGER NOT NULL REFERENCES alerts(alert_id) ON DELETE CASCADE, -- Links to alert, Type: integer
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- Acknowledging user, Type: UUID
+    acknowledged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Acknowledgment timestamp, Type: timestamp
+    PRIMARY KEY (alert_id, user_id) -- Composite key
+);
+
+-- History table: Logs edits and deletions for auditing
+CREATE TABLE history (
+    history_id SERIAL PRIMARY KEY, -- Unique history ID, Type: serial
+    table_name VARCHAR(50) NOT NULL, -- Table affected (e.g., 'ticket_entries'), Type: string
+    record_id INTEGER NOT NULL, -- ID of affected record, Type: integer
+    action VARCHAR(20) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')), -- Action performed, Type: string
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- User performing action, Type: UUID
+    changes JSONB, -- Old/new values, Type: JSONB
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Timestamp of action, Type: timestamp
+);
+
+-- Import_export_logs table: Logs import/export operations for auditing
+CREATE TABLE import_export_logs (
+    log_id SERIAL PRIMARY KEY, -- Unique log ID, Type: serial
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- User performing the operation (nullable), Type: UUID
+    operation_type VARCHAR(20) NOT NULL CHECK (operation_type IN ('IMPORT', 'EXPORT')), -- Type of operation, Type: enum
+    file_type VARCHAR(50), -- File format (e.g., '.msg', '.json'), Type: string
+    status VARCHAR(20) NOT NULL CHECK (status IN ('SUCCESS', 'FAILURE')), -- Operation outcome, Type: enum
+    details TEXT, -- Additional info (e.g., error message, record count), Type: text
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Timestamp of operation, Type: timestamp
+);
+
+-- User_interaction_logs table: Logs user interactions for analytics (e.g., data entry speed, alert interactions)
+CREATE TABLE user_interaction_logs (
+    log_id SERIAL PRIMARY KEY, -- Unique log ID, Type: serial
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL, -- User performing the action, Type: UUID
+    action_type VARCHAR(50) NOT NULL, -- Type of action (e.g., 'form_submission', 'alert_click'), Type: string
+    page_name VARCHAR(255), -- Page where action occurred (e.g., 'EditUserJob'), Type: string
+    widget_name VARCHAR(255), -- Widget involved (e.g., 'CalendarSelectBox', 'BottomBar'), Type: string
+    action_details JSONB, -- Details (e.g., form submission time in seconds, alert_id clicked), Type: JSONB
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Timestamp of action, Type: timestamp
+);
+
+-- Function to check for multiple failed logins and create security alert
+CREATE OR REPLACE FUNCTION check_failed_logins() RETURNS TRIGGER AS $$
+DECLARE
+    failed_count INTEGER;
+BEGIN
+    IF NEW.success = FALSE THEN
+        SELECT COUNT(*) INTO failed_count
+        FROM login_attempts
+        WHERE email = NEW.email
+          AND ip_address = NEW.ip_address
+          AND success = FALSE
+          AND attempt_time > CURRENT_TIMESTAMP - INTERVAL '5 minutes';
+        IF failed_count >= 5 THEN
+            INSERT INTO alerts (user_id, alert_type, severity, message, created_at)
+            VALUES (NEW.user_id, 'security', 'high', 
+                    CONCAT('Multiple failed login attempts detected for email: ', NEW.email, ' from IP: ', NEW.ip_address), 
+                    CURRENT_TIMESTAMP);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for failed login security alerts
+CREATE TRIGGER failed_login_alert_trigger
+    AFTER INSERT ON login_attempts
+    FOR EACH ROW EXECUTE FUNCTION check_failed_logins();
+
+-- Function to check for suspicious IP activity across multiple users/emails
+CREATE OR REPLACE FUNCTION check_suspicious_ip_activity() RETURNS TRIGGER AS $$
+DECLARE
+    failed_count INTEGER;
+BEGIN
+    IF NEW.success = FALSE THEN
+        SELECT COUNT(*) INTO failed_count
+        FROM login_attempts
+        WHERE ip_address = NEW.ip_address
+          AND success = FALSE
+          AND attempt_time > CURRENT_TIMESTAMP - INTERVAL '5 minutes';
+        IF failed_count >= 10 THEN
+            INSERT INTO alerts (alert_type, severity, message, created_at)
+            VALUES ('security', 'high', 
+                    CONCAT('Suspicious IP activity detected from IP: ', NEW.ip_address, ' with multiple failed login attempts across accounts'), 
+                    CURRENT_TIMESTAMP);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for suspicious IP activity alerts
+CREATE TRIGGER suspicious_ip_alert_trigger
+    AFTER INSERT ON login_attempts
+    FOR EACH ROW EXECUTE FUNCTION check_suspicious_ip_activity();
+
+-- Function to check for unauthorized access attempts
+CREATE OR REPLACE FUNCTION check_unauthorized_access() RETURNS TRIGGER AS $$
+DECLARE
+    user_role_admin BOOLEAN;
+    user_role_manager BOOLEAN;
+    is_authorized BOOLEAN;
+BEGIN
+    -- Fetch user roles
+    SELECT user_is_admin, user_is_manager INTO user_role_admin, user_role_manager
+    FROM users WHERE user_id = NEW.user_id;
+
+    -- Check authorization based on action and role
+    is_authorized = FALSE;
+    IF NEW.action = 'DELETE' THEN
+        IF user_role_admin THEN
+            is_authorized = TRUE; -- Admins can delete any content
+        ELSIF user_role_manager AND NEW.table_name IN ('ticket_entries', 'ticket_misc_entries') THEN
+            -- Managers can delete non-manager user content; assume application logs only valid attempts
+            is_authorized = TRUE;
+        END IF;
+    ELSIF NEW.action = 'UPDATE' AND NEW.table_name IN ('users', 'tickets', 'ticket_entries', 'ticket_misc_entries') THEN
+        IF user_role_admin OR (user_role_manager AND NEW.table_name IN ('ticket_entries', 'ticket_misc_entries')) THEN
+            is_authorized = TRUE; -- Admins/managers can update relevant tables
+        ELSIF NEW.table_name IN ('ticket_entries', 'ticket_misc_entries') THEN
+            -- Check if user is updating their own content
+            IF EXISTS (
+                SELECT 1 FROM ticket_entries WHERE entry_id = NEW.record_id AND user_id = NEW.user_id
+                UNION
+                SELECT 1 FROM ticket_misc_entries WHERE entry_id = NEW.record_id AND user_id = NEW.user_id
+            ) THEN
+                is_authorized = TRUE;
+            END IF;
+        END IF;
+    END IF;
+
+    -- Create alert if unauthorized
+    IF NOT is_authorized THEN
+        INSERT INTO alerts (user_id, alert_type, severity, message, created_at)
+        VALUES (NEW.user_id, 'security', 'critical', 
+                CONCAT('Unauthorized access attempt by user: ', NEW.user_id, ' on table: ', NEW.table_name, ', action: ', NEW.action), 
+                CURRENT_TIMESTAMP);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for unauthorized access alerts
+CREATE TRIGGER unauthorized_access_alert_trigger
+    AFTER INSERT ON history
+    FOR EACH ROW EXECUTE FUNCTION check_unauthorized_access();
+
+-- Indexes for performance (common query fields)
+CREATE INDEX idx_users_oauth ON users (oauth_provider, oauth_id) WHERE oauth_id IS NOT NULL;
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX idx_user_sessions_is_active ON user_sessions(is_active);
+CREATE INDEX idx_login_attempts_email ON login_attempts(email);
+CREATE INDEX idx_ticket_entries_user_id ON ticket_entries(user_id);
+CREATE INDEX idx_ticket_entries_ticket_id ON ticket_entries(ticket_id);
+CREATE INDEX idx_ticket_entries_job_start_date ON ticket_entries(job_start_date);
+CREATE INDEX idx_ticket_misc_entries_user_id ON ticket_misc_entries(user_id);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_group_id ON notifications(group_id);
+CREATE INDEX idx_alerts_entry_id ON alerts(entry_id);
+CREATE INDEX idx_alerts_user_id ON alerts(user_id);
+CREATE INDEX idx_alerts_group_id ON alerts(group_id);
+CREATE INDEX idx_alerts_alert_type ON alerts(alert_type);
+CREATE INDEX idx_alerts_severity ON alerts(severity);
+CREATE INDEX idx_alerts_unresolved ON alerts (alert_type, severity) WHERE is_resolved = FALSE;
+CREATE INDEX idx_ticket_entry_devices_entry_id ON ticket_entry_devices(entry_id);
+CREATE INDEX idx_ticket_entry_devices_device_id ON ticket_entry_devices(device_id);
+CREATE INDEX idx_login_attempts_attempt_time ON login_attempts(attempt_time);
+CREATE INDEX idx_login_attempts_email_ip ON login_attempts(email, ip_address);
+CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempt_time);
+
+-- Initialize groups with default roles
+INSERT INTO groups (group_name) VALUES ('field'), ('manager'), ('admin');
+
+-- Notes:
+-- Triggers Alert indicates fields that generate alerts when non-NULL or TRUE.
+-- Alerts table supports job-related, security, system, and site-wide alerts with severity, resolution, and multi-user acknowledgment.
+-- Buildings and devices use building_uuid and device_uuid for global uniqueness and external integrations.
+-- Devices are unique to a specific building (enforced by building_id and unique_device_name_per_building).
+-- Tickets have globally unique ticket_numbers.
+-- Ticket_entry_devices ensures device building_id matches ticket building_id.
+-- Email_verification_tokens prepares for future email verification and OAuth support.
+-- History table logs edits/deletions for auditing.
+-- Alerts include escalation tracking and acknowledgment via separate table.
+-- Daily_alert_counts view enforces 5 non-critical alerts/day/user limit.
+-- Import_export_logs table logs import/export operations for auditing.
+-- User_interaction_logs table tracks user interactions (e.g., form submissions, alert clicks) for UX analytics.
+-- Security triggers:
+--   - failed_login_alert_trigger: Creates security alerts for 5+ failed login attempts for the same email/IP in 5 minutes.
+--   - suspicious_ip_alert_trigger: Creates security alerts for 10+ failed login attempts from the same IP across different emails in 5 minutes.
+--   - unauthorized_access_alert_trigger: Creates security alerts for unauthorized actions logged in history table (e.g., non-admin deletes, unauthorized updates).
+-- Alert Deduplication (Application Layer): To prevent redundant security alerts (e.g., repeated failed logins from the same IP), check for existing unresolved alerts in the alerts table (matching alert_type, user_id, and/or message content) within a recent time window (e.g., 1 hour) before inserting new alerts. Example Django logic:
+--   ```
+--   from django.utils import timezone
+--   from datetime import timedelta
+--   from .models import Alert
+--   def should_create_alert(alert_type, user_id, message):
+--       recent_alerts = Alert.objects.filter(
+--           alert_type=alert_type,
+--           user_id=user_id,
+--           is_resolved=False,
+--           created_at__gte=timezone.now() - timedelta(hours=1)
+--       ).count()
+--       return recent_alerts == 0
+--   ```
+```
