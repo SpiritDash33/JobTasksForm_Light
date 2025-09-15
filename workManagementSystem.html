@@ -1,0 +1,2627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Management System - 1 Building → 1 Device → Many Tasks</title>
+    <script src="Sample_code/emailParser.js"></script>
+    <script src="workManagementSystem_storage.js"></script>
+    <script src="workManagementSystem_mappings.js"></script>
+    <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --section-bg: white;
+            --border-color: #ddd;
+            --header-bg: linear-gradient(135deg, #adb5bd, #868e96);
+            --nav-bg: #343a40;
+            --nav-text: white;
+            --hover-bg: #e9ecef;
+            --required-border: #ff0000;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1e1e1e;
+            --text-color: #ffffff;
+            --section-bg: #2a2a2a;
+            --border-color: #404040;
+            --header-bg: linear-gradient(135deg, #37474f, #263238);
+            --nav-bg: #2c2c2c;
+            --nav-text: #ffffff;
+            --hover-bg: #404040;
+            --required-border: #ff6b6b;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .navbar {
+            background-color: var(--nav-bg);
+            color: var(--nav-text);
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.25rem;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .nav-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            font-size: 18px;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--nav-text);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .dropdown {
+            position: relative;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background-color: var(--nav-bg);
+            min-width: 160px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            z-index: 1000;
+            margin-top: 8px;
+        }
+
+        .dropdown.show .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-content a {
+            color: var(--nav-text);
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            transition: background-color 0.2s;
+        }
+
+        .dropdown-content a:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .section {
+            border: 3px solid #333;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+        }
+
+        [data-theme="dark"] .section {
+            border-color: var(--border-color);
+            background-color: var(--section-bg);
+        }
+
+        .section h2 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        [data-theme="dark"] .section h2 {
+            border-bottom-color: var(--border-color);
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .edit-section {
+            flex: 2;
+        }
+
+        .jobs-list-section {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .form-row {
+            margin: 5px 0 5px 0;
+            padding: 10px;
+            background-color: var(--section-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .form-row label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .form-row input,
+        .form-row select,
+        .form-row textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        /* Ensure single inputs in form-row don't overflow */
+        .form-row > input:only-child,
+        .form-row > select:only-child,
+        .form-row > textarea:only-child {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .form-row input:focus,
+        .form-row select:focus,
+        .form-row textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .spacer {
+            height: 15px;
+            border-bottom: 1px solid #eee;
+            margin: 15px 0;
+        }
+
+        [data-theme="dark"] .spacer {
+            border-bottom-color: var(--border-color);
+        }
+
+        input[type="text"], input[type="date"], input[type="time"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        [data-theme="dark"] input[type="text"], [data-theme="dark"] input[type="date"],
+        [data-theme="dark"] input[type="time"], [data-theme="dark"] select, [data-theme="dark"] textarea {
+            border-color: var(--border-color);
+        }
+
+        textarea {
+            min-height: 40px;
+            resize: vertical;
+            overflow: hidden;
+        }
+
+        .required-empty {
+            background-color: lightpink !important;
+        }
+
+        [data-theme="dark"] .required-empty {
+            background-color: #ff6b6b !important;
+        }
+
+        .job-link {
+            display: block;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            color: #333;
+            border-radius: 4px;
+        }
+
+        .job-link:hover {
+            background-color: #e9e9e9;
+        }
+
+        .job-link.missing-required {
+            background-color: #ffe6e6;
+            border-color: #ff0000;
+        }
+
+        .job-link.current-job {
+            border-left: 4px solid #007bff;
+        }
+
+        .job-link.missing-required.current-job {
+            border-left: 4px solid #ff0000;
+        }
+
+        /* 🚨 VALIDATION ERROR STYLES */
+        .validation-error {
+            background-color: #ffe6e6 !important;
+            border-color: #dc3545 !important;
+            border-left: 6px solid #dc3545 !important;
+            color: #721c24 !important;
+        }
+
+        .validation-error .job-summary-item {
+            background-color: #ffe6e6;
+            border-left-color: #dc3545;
+        }
+
+        .validation-error .daily-job-box {
+            background-color: #ffe6e6;
+            border-color: #dc3545;
+        }
+
+        .validation-error .calendar-job {
+            background-color: rgba(220,53,69,0.2);
+            border-left: 2px solid #dc3545;
+        }
+
+        [data-theme="dark"] .validation-error {
+            background-color: rgba(220,53,69,0.2) !important;
+            border-color: #ff6b6b !important;
+            color: #ffadad !important;
+        }
+
+        [data-theme="dark"] .validation-error .job-summary-item {
+            background-color: rgba(220,53,69,0.1);
+            border-left-color: #ff6b6b;
+        }
+
+        [data-theme="dark"] .validation-error .daily-job-box {
+            background-color: rgba(220,53,69,0.1);
+            border-color: #ff6b6b;
+        }
+
+        [data-theme="dark"] .validation-error .calendar-job {
+            background-color: rgba(255,107,107,0.2);
+            border-left: 2px solid #ff6b6b;
+        }
+
+        .validation-warning {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+            border-left: 6px solid #ffc107 !important;
+            color: #856404 !important;
+        }
+
+        .validation-warning .job-summary-item {
+            background-color: #fff3cd;
+            border-left-color: #ffc107;
+        }
+
+        .validation-warning .daily-job-box {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+        }
+
+        .validation-warning .calendar-job {
+            background-color: rgba(255,193,7,0.2);
+            border-left: 2px solid #ffc107;
+        }
+
+        [data-theme="dark"] .validation-warning {
+            background-color: rgba(255,193,7,0.2) !important;
+            border-color: #ffda76 !important;
+            color: #ffe066 !important;
+        }
+
+        .validation-status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .validation-status-indicator.error {
+            background-color: #dc3545;
+            animation: pulse-error 2s infinite;
+        }
+
+        .validation-status-indicator.warning {
+            background-color: #ffc107;
+            animation: pulse-warning 2s infinite;
+        }
+
+        .validation-status-indicator.valid {
+            background-color: #28a745;
+        }
+
+        @keyframes pulse-error {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        @keyframes pulse-warning {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        [data-theme="dark"] .job-link {
+            background-color: var(--section-bg);
+            border-color: var(--border-color);
+            color: var(--text-color);
+        }
+
+        [data-theme="dark"] .job-link:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .job-summary-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: #f8f9fa;
+        }
+
+        .job-summary-item.missing-required {
+            background-color: #ffe6e6;
+            border-left-color: #ff0000;
+        }
+
+        .job-summary-item .missing-required {
+            background-color: #ffe6e6;
+            color: #721c24;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .job-summary-item .current-job {
+            border-left: 4px solid #007bff;
+            padding-left: 8px;
+        }
+
+        .job-summary-item .missing-required.current-job {
+            border-left: 4px solid #ff0000;
+        }
+
+        [data-theme="dark"] .job-summary-item {
+            background-color: var(--section-bg);
+            border-left-color: #007bff;
+        }
+
+        [data-theme="dark"] .job-summary-item.missing-required {
+            background-color: #ff6b6b;
+            border-left-color: #ff6b6b;
+        }
+
+        .daily-job-box.current-job {
+            border-left: 4px solid #007bff;
+        }
+
+        .daily-job-box {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .daily-job-box.missing-required {
+            background-color: #ffe6e6;
+            border-color: #ff0000;
+        }
+
+        [data-theme="dark"] .daily-job-box {
+            background-color: var(--section-bg);
+            border-color: var(--border-color);
+        }
+
+        [data-theme="dark"] .daily-job-box.missing-required {
+            background-color: #ff6b6b;
+            border-color: #ff6b6b;
+        }
+
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #ddd;
+        }
+
+        [data-theme="dark"] .calendar {
+            background-color: var(--border-color);
+        }
+
+        .calendar-day {
+            background-color: white;
+            padding: 5px;
+            min-height: 60px;
+            font-size: 12px;
+            overflow: hidden;
+        }
+
+        [data-theme="dark"] .calendar-day {
+            background-color: var(--section-bg);
+        }
+
+        .calendar-day-header {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+            padding: 5px;
+        }
+
+        [data-theme="dark"] .calendar-day-header {
+            background-color: var(--hover-bg);
+        }
+
+        .calendar-day-number {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .calendar-day-number:hover {
+            background-color: #e3f2fd;
+            border-radius: 3px;
+        }
+
+        [data-theme="dark"] .calendar-day-number:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .calendar-job {
+            background-color: #e3f2fd;
+            padding: 1px 3px;
+            margin: 1px 0;
+            border-radius: 2px;
+            font-size: 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-job.missing-required {
+            background-color: #ffe6e6;
+        }
+
+        [data-theme="dark"] .calendar-job {
+            background-color: rgba(33,150,243,0.3);
+        }
+
+        [data-theme="dark"] .calendar-job.missing-required {
+            background-color: rgba(107,107,255,0.3);
+        }
+
+        /* Button Styles */
+        .btn-new { background-color: #28a745; color: white; }
+        .btn-save { background-color: #007bff; color: white; }
+        .btn-export { background-color: #6f42c1; color: white; }
+        .btn-copy { background-color: #fd7e14; color: white; }
+        .btn-load { background-color: #20c997; color: white; }
+        .btn-edit { background-color: #ffc107; color: black; }
+        .btn-migrate { background-color: #dc3545; color: white; }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        .header-buttons {
+            float: right;
+        }
+
+        .form-buttons {
+            margin: 30px 0 0 0;
+            padding: 15px;
+            border-top: 2px solid #dee2e6;
+            background-color: #f8f9fa;
+            border-radius: 0 0 8px 8px;
+            text-align: right;
+        }
+
+        [data-theme="dark"] .form-buttons {
+            background-color: var(--section-bg);
+            border-top-color: var(--border-color);
+        }
+
+        .technical-details-container {
+            position: relative;
+        }
+
+        .form-section-header {
+            display: flex;
+            align-items: center;
+            margin: 20px 0 15px 0;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(173,181,189,0.1);
+        }
+
+        .form-section-header .icon {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px 12px;
+            font-size: 16px;
+        }
+
+        .form-section-header .title {
+            background: linear-gradient(135deg, #adb5bd, #868e96);
+            color: white;
+            padding: 8px 15px;
+            flex: 1;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        [data-theme="dark"] .form-section-header .icon {
+            background: var(--section-bg);
+            border-color: var(--border-color);
+        }
+
+        #technicalDetailsDropdown {
+            width: 150px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: inline-block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .required-field {
+            color: #dc3545;
+        }
+
+        .summary-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .summary-left {
+            flex: 2;
+        }
+
+        .summary-right {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        .drop-zone.dragover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+
+        [data-theme="dark"] .drop-zone {
+            background-color: var(--section-bg);
+            border-color: var(--border-color);
+        }
+
+        [data-theme="dark"] .drop-zone.dragover {
+            border-color: #007bff;
+            background-color: rgba(33,150,243,0.2);
+        }
+
+        .import-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .import-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .import-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        [data-theme="dark"] .import-success {
+            background-color: rgba(40,167,69,0.3);
+            color: var(--text-color);
+            border-color: #28a745;
+        }
+
+        [data-theme="dark"] .import-error {
+            background-color: rgba(220,53,69,0.3);
+            color: var(--text-color);
+            border-color: #dc3545;
+        }
+
+        .export-format-selector {
+            margin: 10px 0;
+        }
+
+        .export-format-selector select {
+            width: auto;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .system-status {
+            padding: 10px;
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        [data-theme="dark"] .system-status {
+            background-color: rgba(33,150,243,0.2);
+            border-color: rgba(33,150,243,0.5);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Mobile Responsive Design */
+    @media (max-width: 768px) {
+        body {
+            margin: 10px;
+            font-size: 14px;
+        }
+
+        .navbar {
+            padding: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .navbar-brand {
+            font-size: 1rem;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .navbar-right {
+            gap: 0.5rem;
+        }
+
+        .nav-icon {
+            width: 35px;
+            height: 35px;
+            font-size: 16px;
+        }
+
+        .main-container {
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .edit-section {
+            flex: none;
+        }
+
+        .jobs-list-section {
+            flex: none;
+            min-width: auto;
+        }
+
+        .section {
+            margin: 15px 0;
+            padding: 10px;
+        }
+
+        .drop-zone {
+            padding: 15px;
+            font-size: 14px;
+        }
+
+        .calendar {
+            grid-template-columns: repeat(7, 1fr);
+            font-size: 11px;
+        }
+
+        .calendar-day {
+            min-height: 50px;
+            padding: 2px;
+        }
+
+        .calendar-job {
+            font-size: 9px;
+            padding: 1px 2px;
+        }
+
+        .form-row {
+            margin: 8px 0 8px 20px;
+        }
+
+        .form-buttons {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .form-buttons button {
+            width: 100%;
+            padding: 10px;
+        }
+
+        .header-buttons {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            float: none;
+        }
+
+        .summary-container {
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .summary-left, .summary-right {
+            flex: none;
+            min-width: auto;
+        }
+
+        .export-format-selector {
+            margin-bottom: 10px;
+        }
+
+        .export-format-selector select {
+            width: 100%;
+            margin-left: 0;
+        }
+    }
+
+    @media (max-width: 480px) {
+        body {
+            margin: 5px;
+        }
+
+        .navbar-brand {
+            font-size: 0.9rem;
+        }
+
+        .form-row {
+            margin: 8px 0 8px 10px;
+        }
+
+        .form-section-header {
+            font-size: 13px;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            padding-bottom: 8px;
+        }
+
+        .calendar {
+            font-size: 10px;
+        }
+
+        .calendar-day-number {
+            font-size: 12px;
+        }
+
+        .daily-job-box {
+            padding: 10px;
+            font-size: 13px;
+        }
+    }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">Work Management System</div>
+        <div class="navbar-right">
+            <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode">🌙</button>
+            <div class="dropdown">
+                <div class="nav-icon" title="User Menu">👤</div>
+                <div class="dropdown-content">
+                    <a href="#" onclick="showSettings(); return false;">Settings</a>
+                    <a href="#" onclick="showAbout(); return false;">About</a>
+                    <a href="#" onclick="showImportData(); return false;">Import Data</a>
+                    <a href="#" onclick="exportData(); return false;">Export Data</a>
+                    <a href="#" onclick="clearAllData(); return false;">Reset All Data</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="section system-status">
+        <strong>System Status:</strong> <span id="systemStatus">Initializing...</span>
+    </div>
+
+    <div class="summary-container">
+        <!-- Daily Summary Section -->
+        <div class="section summary-left">
+            <h2>Daily Summary
+                <div class="header-buttons">
+                    <button class="btn-copy" onclick="copySummaryToClipboard()">Copy Summary</button>
+                </div>
+            </h2>
+            <div id="jobSummary"></div>
+        </div>
+
+        <!-- Email Import Section -->
+        <div class="section summary-right">
+            <h2>Email Import</h2>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <p>Drag & drop .msg or .eml files here<br>or click to select</p>
+                <small style="color: #666; font-size: 11px;">⚠️ Email titles may contain incorrect building info - parser prioritizes body content</small>
+            </div>
+            <input type="file" id="fileInput" accept=".msg,.eml" multiple style="display: none;">
+            <div id="importStatus"></div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Edit Job Section -->
+        <div class="edit-section">
+            <div class="section">
+                <h2>Edit Job Task
+                    <div class="header-buttons">
+                        <button class="btn-new" onclick="createNewJob()">+</button>
+                        <button class="btn-save" onclick="saveCurrentJob()">Save</button>
+                        <button class="btn-migrate" onclick="migrateLegacyJobs()" style="display: none;" id="migrateBtn" title="Migrate legacy job data">Migrate Legacy</button>
+                    </div>
+                </h2>
+
+                <form id="jobForm">
+                    <div class="form-section-header">
+                        <div class="icon">📋</div>
+                        <div class="title">Job Information</div>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Job Number: <span class="required-field">*</span></label>
+                            <input type="text" id="job_number" placeholder="AUTO-generated or enter custom" readonly>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Building Code:</label>
+                            <input type="text" id="building_code" placeholder="Enter building code">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Building Address:</label>
+                        <input type="text" id="building_address" placeholder="Enter building address">
+                    </div>
+
+                    <div class="form-row">
+                        <label>Job Name: <span class="required-field">*</span></label>
+                        <input type="text" id="job_name" placeholder="Enter job name" required>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">🔗</div>
+                        <div class="title">Related Tickets</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Related Tickets:</label>
+                        <textarea id="related_tickets" placeholder="Enter related ticket numbers and device-based links (multi-line, auto-populated from devices)"></textarea>
+                    </div>
+                    <div id="auto_related_tickets" style="font-size: 12px; color: #666; margin: 5px 0;">
+                        Auto-populated from associated devices
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">⏰</div>
+                        <div class="title">Schedule & Team</div>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Start Date: <span class="required-field">*</span></label>
+                            <input type="date" id="job_start_date" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Start Time: <span class="required-field">*</span></label>
+                            <input type="time" id="job_start_time" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>End Time: <span class="required-field">*</span></label>
+                            <input type="time" id="job_end_time" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Participants:</label>
+                        <input type="text" id="job_participants" placeholder="Enter team members or participants">
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">📊</div>
+                        <div class="title">Status & Dispatch</div>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Dispatch Type: <span class="required-field">*</span></label>
+                            <select id="job_dispatch_type">
+                                <option value="">Select...</option>
+                                <option value="Sim-T">Sim-T</option>
+                                <option value="Corrigo">Corrigo</option>
+                                <option value="Spontaneous">Spontaneous</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Field Status: <span class="required-field">*</span></label>
+                            <select id="job_field_status" required>
+                                <option value="">Select...</option>
+                                <option value="close">Close</option>
+                                <option value="pending">Pending</option>
+                                <option value="in progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="on hold">On Hold</option>
+                                <option value="reassign">Reassign</option>
+                                <option value="monitor">Monitor</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Follow-Up Required: <span class="required-field">*</span></label>
+                            <select id="job_followup_required" required>
+                                <option value="">Select...</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Field Notes:</label>
+                        <textarea id="job_filed_status_notes" placeholder="Additional status information"></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">🔧</div>
+                        <div class="title">Materials & Resources</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Materials Used:</label>
+                        <textarea id="job_materials_used" placeholder="List materials used for this job"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Materials Needed:</label>
+                        <textarea id="job_materials_needed" placeholder="List materials needed for future work"></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">📝</div>
+                        <div class="title">Reference & Delays</div>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Ref#:</label>
+                            <input type="text" id="job_reference_number" placeholder="Enter reference number">
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Escort Delay:</label>
+                            <input type="time" id="job_escort_delay">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Hindrances:</label>
+                        <textarea id="job_hindrances" placeholder="Describe any obstacles or issues encountered"></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">🔐</div>
+                        <div class="title">Access & Programming</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Access Needed:</label>
+                        <textarea id="job_access_needed" placeholder="Describe access requirements"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Programming Changes:</label>
+                        <textarea id="job_programming_changes" placeholder="Describe any programming modifications"></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">🖥️</div>
+                        <div class="title">Device Information</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Device Type:</label>
+                        <select id="device_type">
+                            <option value="">Select...</option>
+                            <option value="Reader">Reader</option>
+                            <option value="Door Contact">Door Contact</option>
+                            <option value="SAR">SAR</option>
+                            <option value="Mag Hold">Mag Hold</option>
+                            <option value="ADA/Opener">ADA/Opener</option>
+                            <option value="Wave Sensor">Wave Sensor</option>
+                            <option value="REX/EDR">REX/EDR</option>
+                            <option value="Hinge">Hinge</option>
+                            <option value="Crash Bar">Crash Bar</option>
+                            <option value="Signal Light/Sounder">Signal Light/Sounder</option>
+                            <option value="Cassette">Cassette</option>
+                            <option value="Camera">Camera</option>
+                            <option value="Encoder">Encoder</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Device ID: <span class="required-field">*</span></label>
+                        <input type="text" id="device_id" placeholder="Enter device name or identifier" required>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Device Details:</label>
+                        <textarea id="job_device_details" placeholder="Additional device information"></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">⚠️</div>
+                        <div class="title">Problem Details</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Trouble Type:</label>
+                        <select id="job_trouble_type">
+                            <option value="">Select...</option>
+                            <option value="malfunction">Malfunction</option>
+                            <option value="DFO">DFO</option>
+                            <option value="line error">Line Error</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Trouble Description: <span class="required-field">*</span></label>
+                        <textarea id="job_trouble_description" placeholder="Describe the problem or issue" required></textarea>
+                    </div>
+
+                    <div class="form-section-header">
+                        <div class="icon">✅</div>
+                        <div class="title">Resolution</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Work Description: <span class="required-field">*</span></label>
+                        <textarea id="job_work_description" placeholder="Describe the work performed" required></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label>Technical Details:</label>
+                        <div class="technical-details-container">
+                            <select id="technicalDetailsDropdown" onchange="addTechnicalDetails()">
+                                <option value="">Add...</option>
+                                <option value="reader">Reader</option>
+                                <option value="door">Door</option>
+                                <option value="lock">Lock</option>
+                                <option value="rex">Rex</option>
+                            </select>
+                            <textarea id="job_technical_details" placeholder="Technical details and specifications"></textarea>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="form-buttons">
+                    <div class="export-format-selector">
+                        <label>Export Format:</label>
+                        <select id="exportFormat">
+                            <option value="clipboard">Clipboard</option>
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                            <option value="summary">Summary</option>
+                        </select>
+                    </div>
+                    <button class="btn-save" onclick="saveCurrentJob()">Save</button>
+                    <button class="btn-load" onclick="loadJob()">Load</button>
+                    <button class="btn-edit" onclick="editJob()">Edit</button>
+                    <button class="btn-export" onclick="exportCurrentJob()">Export</button>
+                    <button class="btn-copy" onclick="copyCurrentJobToFormat()">Copy to Format</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily List Section -->
+        <div class="jobs-list-section">
+            <div class="section">
+                <h2>Daily List</h2>
+                <div id="jobsList"></div>
+            </div>
+
+            <div class="section">
+                <h2>Calendar</h2>
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Tasks (Culled) Section -->
+    <div class="section">
+        <h2>Daily Tasks (Culled)
+            <div class="header-buttons">
+                <button class="btn-export" onclick="exportAllJobs()">Export All</button>
+                <button class="btn-copy" onclick="copyAllSummaries()">Copy All Summaries</button>
+                <button class="btn-copy" onclick="copyAllToCSV()">Copy All CSV</button>
+            </div>
+        </h2>
+        <div id="dailyJobs"></div>
+    </div>
+
+    <script>
+        // Global variables
+        let wmsStorage = null;
+        let currentJobId = null;
+        let currentJobEntry = null;
+
+        // Application state reset function
+        function resetWMSApplicationState() {
+            currentJobId = null;
+            currentJobEntry = null;
+            jobs = [];
+        }
+
+        // UI reset function
+        function resetWMSUIElements() {
+            // Clear job form
+            clearForm();
+
+            // Reset system status
+            const systemStatusEl = document.getElementById('systemStatus');
+            if (systemStatusEl) {
+                systemStatusEl.textContent = 'Initializing...';
+                systemStatusEl.style.color = '#28a745';
+            }
+
+            // Clear job summary and lists
+            const jobSummaryEl = document.getElementById('jobSummary');
+            if (jobSummaryEl) jobSummaryEl.innerHTML = '';
+
+            const jobsListEl = document.getElementById('jobsList');
+            if (jobsListEl) jobsListEl.innerHTML = '';
+
+            const dailyJobsEl = document.getElementById('dailyJobs');
+            if (dailyJobsEl) dailyJobsEl.innerHTML = '';
+
+            const calendarEl = document.getElementById('calendar');
+            if (calendarEl) calendarEl.innerHTML = '';
+
+            // Clear import status
+            const importStatusEl = document.getElementById('importStatus');
+            if (importStatusEl) importStatusEl.innerHTML = '';
+
+            // Reset date to today
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('job_start_date');
+            if (dateInput) dateInput.value = today;
+        }
+
+        const requiredFields = [
+            'job_name', 'job_start_date', 'job_start_time', 'job_end_time',
+            'job_dispatch_type', 'job_field_status', 'job_followup_required',
+            'device_id', 'job_trouble_description', 'job_work_description'
+        ];
+
+        const technicalDetailsTemplates = {
+            reader: `[Reader]
+Voltage to Reader: - metered at reader
+HID or SafeTrust:
+Card Reader Info: Type, Spacer?
+V3 or V4 module
+SafeTrust Info: Firmware & Dr#`,
+
+            door: `[Door]
+Fail safe or Fail Secure
+Single Door or Double Door
+Locking hardware: Schlage cassette or Corbin Russwin Cassette or Von Duprin crash bar
+Type of hinge: 4.5" center wire, 5" offset wire or? DC: ¾ or 1", Magnasphere or GRI`,
+
+            lock: `[Lock]
+Voltage to lock: - metered at frame side of hinge`,
+
+            rex: `[Rex]
+Voltage to REX: - metered at frame side of hinge
+REX Resistance: - metered at frame side of hinge and as close/direct to REX. I.E. OL, 16-23Ω Solid`
+        };
+
+        // Initialize the system
+        async function initializeSystem() {
+            try {
+                // Reset application state and UI first
+                resetWMSApplicationState();
+                resetWMSUIElements();
+
+                updateSystemStatus('Initializing storage...');
+                wmsStorage = new WMSStorage();
+                window.wmsStorage = wmsStorage; // Make available globally for mappings
+                await wmsStorage.init();
+
+                updateSystemStatus('Storage initialized successfully');
+                console.log('Work Management System initialized');
+
+                // Set default date and load existing jobs
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('job_start_date').value = today;
+
+                await loadJobsForDate(today);
+                updateDisplays();
+
+                // Check for legacy jobs to migrate
+                checkForLegacyJobs();
+
+            } catch (error) {
+                console.error('Failed to initialize system:', error);
+                updateSystemStatus('Storage initialization failed: ' + error.message, true);
+            }
+        }
+
+        function updateSystemStatus(message, isError = false) {
+            const statusEl = document.getElementById('systemStatus');
+            statusEl.textContent = message;
+            statusEl.style.color = isError ? '#dc3545' : '#28a745';
+
+            // Auto-hide successful status messages after 15 seconds
+            if (!isError) {
+                console.log(`⏰ Auto-hide scheduled for: ${message}`);
+                setTimeout(() => {
+                    console.log(`⏰ Checking auto-hide for: ${message}, current: ${statusEl.textContent}`);
+                    if (statusEl.textContent === message) {
+                        statusEl.textContent = 'System ready';
+                        statusEl.style.color = '#28a745';
+                        console.log('✅ Auto-hide: Changed to "System ready"');
+                    } else {
+                        console.log('❌ Auto-hide: Message already changed');
+                    }
+                }, 15000); // 15 seconds
+            }
+        }
+
+        // Job management functions
+        async function loadJobsForDate(dateStr) {
+            if (!wmsStorage) return;
+
+            try {
+                const entries = await wmsStorage.getTicketEntriesByDate(dateStr);
+
+                // Enrich entries with ticket and building info
+                const enrichedEntries = [];
+                for (const entry of entries) {
+                    try {
+                        const enriched = await DataMappingEngine.enrichJobData(entry);
+                        enrichedEntries.push(enriched);
+                    } catch (error) {
+                        console.warn('Failed to enrich entry:', entry.entry_id, error);
+                        enrichedEntries.push(entry);
+                    }
+                }
+
+                jobs = enrichedEntries;
+                return jobs;
+            } catch (error) {
+                console.error('Failed to load jobs for date:', error);
+                return [];
+            }
+        }
+
+        function validateRequiredFields(jobData = null) {
+            const data = jobData || getCurrentJobData();
+            const missingFields = [];
+
+            requiredFields.forEach(field => {
+                const value = data[field];
+                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                    missingFields.push(field);
+                }
+            });
+
+            return missingFields;
+        }
+
+        function highlightRequiredFields() {
+            const currentData = getCurrentJobData();
+            const missingFields = validateRequiredFields(currentData);
+
+            console.log('Required field validation - missing fields:', missingFields);
+
+            requiredFields.forEach(field => {
+                const element = document.getElementById(field);
+                if (element) {
+                    const isMissing = missingFields.includes(field);
+                    if (isMissing) {
+                        element.classList.add('required-empty');
+                        console.log(`Added required-empty class to ${field}`);
+                    } else {
+                        element.classList.remove('required-empty');
+                        console.log(`Removed required-empty class from ${field}`);
+                    }
+                } else {
+                    console.warn(`Element with ID '${field}' not found`);
+                }
+            });
+        }
+
+        function getCurrentJobData() {
+            const formData = {};
+            const form = document.getElementById('jobForm');
+            const inputs = form.querySelectorAll('input, select, textarea');
+
+            inputs.forEach(input => {
+                formData[input.id] = input.value;
+            });
+
+            return formData;
+        }
+
+        async function populateForm(jobData) {
+            clearForm();
+            currentJobId = jobData.entry_id;
+            currentJobEntry = jobData;
+
+            // Populate form fields
+            document.getElementById('job_name').value = jobData.job_name || '';
+            document.getElementById('job_number').value = jobData.job_number || '';
+            document.getElementById('building_code').value = jobData.building_code || '';
+            document.getElementById('building_address').value = jobData.building_address || '';
+            document.getElementById('device_id').value = jobData.device_id || '';
+            document.getElementById('device_type').value = jobData.device_type || '';
+            document.getElementById('job_start_date').value = jobData.job_start_date || '';
+            document.getElementById('job_start_time').value = jobData.job_start_time || '';
+            document.getElementById('job_end_time').value = jobData.job_end_time || '';
+            document.getElementById('job_participants').value = jobData.job_participants || jobData.job_with_who || '';
+            document.getElementById('job_dispatch_type').value = jobData.job_dispatch_type || '';
+            document.getElementById('job_field_status').value = jobData.job_field_status || '';
+            document.getElementById('job_followup_required').value = jobData.job_followup_required ? 'yes' : 'no';
+            document.getElementById('job_filed_status_notes').value = jobData.job_filed_status_notes || '';
+            document.getElementById('job_materials_used').value = jobData.job_materials_used || '';
+            document.getElementById('job_materials_needed').value = jobData.job_materials_needed || '';
+            document.getElementById('job_reference_number').value = jobData.job_reference_number || '';
+            document.getElementById('job_escort_delay').value = jobData.job_escort_delay || '';
+            document.getElementById('job_hindrances').value = jobData.job_hindrances || '';
+            document.getElementById('job_access_needed').value = jobData.job_access_needed || '';
+            document.getElementById('job_programming_changes').value = jobData.job_programming_changes || '';
+            document.getElementById('job_device_details').value = jobData.job_device_details || '';
+            document.getElementById('job_trouble_type').value = jobData.job_trouble_type || '';
+            document.getElementById('job_trouble_description').value = jobData.job_trouble_description || '';
+            document.getElementById('job_work_description').value = jobData.job_work_description || '';
+            document.getElementById('job_technical_details').value = jobData.job_technical_details || '';
+            document.getElementById('related_tickets').value = jobData.related_tickets || '';
+
+            highlightRequiredFields();
+            updateDisplays();
+        }
+
+        function clearForm() {
+            document.getElementById('jobForm').reset();
+            currentJobId = null;
+            currentJobEntry = null;
+
+            // Generate new job number
+            const timestamp = Date.now();
+            const randomNum = Math.floor(Math.random() * 1000);
+            document.getElementById('job_number').value = `AUTO-${timestamp}-${randomNum}`;
+
+            // Force highlight all empty required fields immediately
+            setTimeout(() => {
+                requiredFields.forEach(field => {
+                    const element = document.getElementById(field);
+                    if (element && !element.value.trim()) {
+                        element.classList.add('required-empty');
+                    }
+                });
+            }, 50);
+        }
+
+        async function saveCurrentJob() {
+            console.log('🔥 SAVE BUTTON CLICKED');
+
+            if (!wmsStorage) {
+                console.error('❌ wmsStorage is null');
+                alert('Storage system not initialized');
+                return;
+            }
+
+            console.log('✅ wmsStorage exists:', wmsStorage);
+
+            try {
+                const jobData = getCurrentJobData();
+                console.log('📋 Form data:', jobData);
+
+                // Validate required fields
+                const missingFields = validateRequiredFields(jobData);
+                console.log('🔍 Missing fields:', missingFields);
+
+                if (missingFields.length > 0) {
+                    console.warn('⚠️ Validation failed, missing:', missingFields);
+                    alert(`Please fill required fields: ${missingFields.join(', ')}`);
+                    return;
+                }
+
+                console.log('✅ Validation passed');
+                updateSystemStatus('Saving job...');
+
+                // Ensure building exists
+                console.log('🏢 Ensuring building exists...');
+                let building = await wmsStorage.getBuildingByName(jobData.building_code || 'Default Building');
+                if (!building) {
+                    console.log('✅ Creating new building');
+                    building = await wmsStorage.saveBuilding({
+                        building_name: jobData.building_code || 'Default Building',
+                        description: jobData.building_address || null
+                    });
+                }
+                console.log('✅ Building:', building);
+
+                // Ensure ticket exists
+                console.log('🎫 Ensuring ticket exists...');
+                let ticket = await wmsStorage.getTicketByNumber(jobData.job_number || `AUTO-${Date.now()}`);
+                if (!ticket) {
+                    console.log('✅ Creating new ticket');
+                    ticket = await wmsStorage.saveTicket({
+                        ticket_number: jobData.job_number,
+                        building_id: building.building_id,
+                        created_at: new Date().toISOString()
+                    });
+                }
+                console.log('✅ Ticket:', ticket);
+
+                // Create entry data
+                const entryData = {
+                    ticket_id: ticket.ticket_id,
+                    job_name: jobData.job_name,
+                    job_start_date: jobData.job_start_date,
+                    job_start_time: jobData.job_start_time,
+                    job_end_time: jobData.job_end_time,
+                    job_participants: jobData.job_participants || jobData.job_with_who || null,
+                    job_reference_number: jobData.job_reference_number || null,
+                    job_escort_delay: jobData.job_escort_delay || null,
+                    job_hindrances: jobData.job_hindrances || null,
+                    job_materials_used: jobData.job_materials_used || null,
+                    job_materials_needed: jobData.job_materials_needed || null,
+                    job_access_needed: jobData.job_access_needed || null,
+                    job_programming_changes: jobData.job_programming_changes || null,
+                    job_dispatch_type: jobData.job_dispatch_type,
+                    job_field_status: jobData.job_field_status,
+                    job_filed_status_notes: jobData.job_filed_status_notes || null,
+                    job_followup_required: jobData.job_followup_required === 'yes',
+                    job_device_details: jobData.job_device_details || null,
+                    job_trouble_type: jobData.job_trouble_type || null,
+                    job_trouble_description: jobData.job_trouble_description,
+                    job_work_description: jobData.job_work_description,
+                    job_technical_details: jobData.job_technical_details || null,
+                    job_related_tickets: jobData.job_related_tickets || null,
+                    created_at: currentJobEntry ? currentJobEntry.created_at : new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+
+                console.log('📝 Entry data:', entryData);
+
+                // Save the entry
+                if (currentJobId) {
+                    entryData.entry_id = currentJobId;
+                }
+
+                console.log('💾 Saving entry...');
+                const savedEntryId = await wmsStorage.saveTicketEntry(entryData);
+                console.log('✅ Entry saved with ID:', savedEntryId);
+
+                // Associate device if specified
+                if (jobData.device_id) {
+                    console.log('🔗 Associating device...');
+                    let device = await wmsStorage.getDeviceByNameAndBuilding(jobData.device_id, building.building_id);
+                    if (!device) {
+                        device = await wmsStorage.saveDevice({
+                            building_id: building.building_id,
+                            device_name: jobData.device_id,
+                            device_type: jobData.device_type || null,
+                            description: jobData.job_device_details || null
+                        });
+                    }
+                    await wmsStorage.associateDeviceWithEntry(savedEntryId, [device.device_id]);
+                }
+
+                currentJobId = savedEntryId;
+
+                // Log the save operation
+                console.log('📝 Logging history...');
+                await wmsStorage.logHistory('ticket_entries', savedEntryId,
+                    currentJobEntry ? 'UPDATE' : 'INSERT',
+                    { old: currentJobEntry, new: entryData });
+
+                // Reload jobs for current date
+                console.log('🔄 Reloading jobs...');
+                const currentDate = document.getElementById('job_start_date').value;
+                await loadJobsForDate(currentDate);
+
+                updateDisplays();
+                updateSystemStatus('Job saved successfully');
+                console.log('🎉 Save completed successfully!');
+
+            } catch (error) {
+                console.error('❌ Failed to save job:', error);
+                console.error('Error details:', error.stack);
+                updateSystemStatus('Save failed: ' + error.message, true);
+                alert('Failed to save job: ' + error.message);
+            }
+        }
+
+        // Migration function for legacy jobs
+        async function checkForLegacyJobs() {
+            const legacyJobs = JSON.parse(localStorage.getItem('serviceLogJobs') || '[]');
+            if (legacyJobs.length > 0) {
+                document.getElementById('migrateBtn').style.display = 'inline-block';
+                updateSystemStatus(`${legacyJobs.length} legacy jobs detected. Click "Migrate Legacy" to import.`);
+            }
+        }
+
+        async function migrateLegacyJobs() {
+            try {
+                const legacyJobs = JSON.parse(localStorage.getItem('serviceLogJobs') || '[]');
+                updateSystemStatus(`Migrating ${legacyJobs.length} legacy jobs...`);
+
+                let migratedCount = 0;
+                for (const legacyJob of legacyJobs) {
+                    try {
+                        await wmsStorage.migrateLegacyJob(legacyJob);
+                        migratedCount++;
+                    } catch (error) {
+                        console.warn('Failed to migrate job:', legacyJob.id, error);
+                    }
+                }
+
+                updateSystemStatus(`Migration complete: ${migratedCount} of ${legacyJobs.length} jobs migrated`);
+
+                // Reload current date jobs
+                const currentDate = document.getElementById('job_start_date').value;
+                await loadJobsForDate(currentDate);
+                updateDisplays();
+
+                // Hide migrate button and clean up
+                document.getElementById('migrateBtn').style.display = 'none';
+                localStorage.removeItem('serviceLogJobs');
+
+            } catch (error) {
+                console.error('Migration failed:', error);
+                updateSystemStatus('Migration failed: ' + error.message, true);
+            }
+        }
+
+        // Legacy compatibility - maintain jobs array for existing functions
+        let jobs = [];
+
+        async function createNewJob() {
+            saveCurrentJob();
+            clearForm();
+            updateDisplays();
+        }
+
+        async function loadJobById(jobId) {
+            const job = jobs.find(j => j.entry_id === jobId);
+            if (job) {
+                await populateForm(job);
+            }
+        }
+
+        function loadJob() {
+            if (jobs.length > 0) {
+                loadJobById(jobs[0].entry_id);
+            }
+        }
+
+        function editJob() {
+            alert('Job is ready for editing in the form above.');
+        }
+
+        // Export functions
+        async function exportCurrentJob() {
+            if (!currentJobEntry) {
+                alert('No job loaded for export');
+                return;
+            }
+
+            try {
+                const format = document.getElementById('exportFormat').value;
+                const exportData = await DataMappingEngine.exportToFormat(format, currentJobEntry);
+
+                // Create blob and download
+                const blob = new Blob([exportData], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `job_${currentJobEntry.job_name}_${currentJobEntry.job_number}.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                await wmsStorage.logImportExport('EXPORT', format, 'SUCCESS', `Exported job ${currentJobEntry.entry_id}`);
+
+            } catch (error) {
+                console.error('Export failed:', error);
+                alert('Export failed: ' + error.message);
+            }
+        }
+
+        async function copyCurrentJobToFormat() {
+            if (!currentJobEntry) {
+                alert('No job loaded for copying');
+                return;
+            }
+
+            try {
+                const format = document.getElementById('exportFormat').value;
+                const exportData = await DataMappingEngine.exportToFormat(format, currentJobEntry);
+
+                await navigator.clipboard.writeText(exportData);
+                alert(`Job copied to clipboard in ${format} format`);
+
+            } catch (error) {
+                console.error('Copy failed:', error);
+                alert('Copy failed: ' + error.message);
+            }
+        }
+
+        async function exportAllJobs() {
+            try {
+                updateSystemStatus('Exporting all jobs...');
+                const allEntries = await wmsStorage.getAllTicketEntries();
+
+                if (allEntries.length === 0) {
+                    alert('No jobs to export');
+                    return;
+                }
+
+                // Export as JSON array
+                const exportData = JSON.stringify(allEntries, null, 2);
+                const blob = new Blob([exportData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `all_jobs_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                await wmsStorage.logImportExport('EXPORT', 'json', 'SUCCESS', `Exported ${allEntries.length} jobs`);
+                updateSystemStatus('Export completed successfully');
+
+            } catch (error) {
+                console.error('Export failed:', error);
+                updateSystemStatus('Export failed: ' + error.message, true);
+            }
+        }
+
+        async function copyAllSummaries() {
+            try {
+                if (jobs.length === 0) {
+                    alert('No jobs to copy');
+                    return;
+                }
+
+                let summaryText = '';
+                for (const job of jobs) {
+                    const summary = await DataMappingEngine.exportToFormat('summary', job);
+                    summaryText += summary + '\n\n';
+                }
+
+                await navigator.clipboard.writeText(summaryText);
+                alert('All job summaries copied to clipboard');
+
+            } catch (error) {
+                console.error('Copy failed:', error);
+                alert('Copy failed: ' + error.message);
+            }
+        }
+
+        async function copyAllToCSV() {
+            try {
+                if (jobs.length === 0) {
+                    alert('No jobs to copy');
+                    return;
+                }
+
+                const csvData = await DataMappingEngine.exportToFormat('csv', jobs[0], jobs);
+                await navigator.clipboard.writeText(csvData);
+                alert('All jobs copied to clipboard as CSV');
+
+            } catch (error) {
+                console.error('Copy failed:', error);
+                alert('Copy failed: ' + error.message);
+            }
+        }
+
+        function copySummaryToClipboard() {
+            const summaryDiv = document.getElementById('jobSummary');
+            const summaryText = summaryDiv.innerText || summaryDiv.textContent;
+
+            navigator.clipboard.writeText(summaryText).then(() => {
+                alert('Job summary copied to clipboard!');
+            });
+        }
+
+        // ⚠️ Email processing functions with WMS integration
+        // CRITICAL: Email subject lines often contain INCORRECT building information!
+        // Parser prioritizes body content over subject lines for accurate data extraction
+        async function handleEmailImport(files) {
+            for (const file of files) {
+                updateSystemStatus(`Processing ${file.name}...`);
+
+                const reader = new FileReader();
+
+                reader.onload = async (e) => {
+                    try {
+                        let emailData;
+
+                        if (file.name.toLowerCase().endsWith('.eml')) {
+                            emailData = EmailParser.parseEml(e.target.result);
+                        } else if (file.name.toLowerCase().endsWith('.msg')) {
+                            emailData = EmailParser.parseMsg(e.target.result);
+                        } else {
+                            throw new Error('Unsupported file format');
+                        }
+
+                        console.log('Parsed email data:', emailData);
+
+                        // Convert to new structure and save
+                        const entryId = await wmsStorage.migrateLegacyJob({
+                            ...emailData,
+                            job_start_date: document.getElementById('job_start_date').value
+                        });
+
+                        // Log import
+                        await wmsStorage.logImportExport('IMPORT', file.name.split('.').pop(), 'SUCCESS', file.name);
+
+                        // Reload jobs and load the new one
+                        await loadJobsForDate(document.getElementById('job_start_date').value);
+                        await loadJobById(entryId);
+
+                        showImportStatus(`Successfully imported: ${file.name}`);
+                        updateSystemStatus('Email imported successfully');
+
+                    } catch (error) {
+                        console.error('Email processing failed:', error);
+                        showImportStatus(`Failed to import ${file.name}: ${error.message}`, true);
+                        await wmsStorage.logImportExport('IMPORT', file.name.split('.').pop(), 'FAILURE', error.message);
+                        updateSystemStatus('Import failed: ' + error.message, true);
+                    }
+                };
+
+                if (file.name.toLowerCase().endsWith('.eml')) {
+                    reader.readAsText(file);
+                } else {
+                    reader.readAsArrayBuffer(file);
+                }
+            }
+        }
+
+        async function handleFiles(files) {
+            await handleEmailImport(files);
+        }
+
+        function showImportStatus(message, isError = false) {
+            const statusDiv = document.getElementById('importStatus');
+            const className = isError ? 'import-error' : 'import-success';
+            statusDiv.innerHTML = `<div class="import-status ${className}">${message}</div>`;
+            setTimeout(() => statusDiv.innerHTML = '', 5000);
+        }
+
+        // UI update functions
+        async function updateJobSummary() {
+            const summaryDiv = document.getElementById('jobSummary');
+            const currentDate = document.getElementById('job_start_date').value;
+
+            if (jobs.length === 0) {
+                summaryDiv.innerHTML = '<p>No jobs for this date.</p>';
+                return;
+            }
+
+            const dayName = new Date(currentDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+            const withPeople = [...new Set(jobs.filter(job => job.job_with_who && job.job_with_who.trim()).map(job => job.job_with_who.trim()))];
+
+            let summaryHTML = `<div class="job-summary-item">`;
+            summaryHTML += `<strong>[${currentDate}] - ${dayName}</strong><br>`;
+            summaryHTML += `hr. 8<br>`;
+            if (withPeople.length > 0) {
+                summaryHTML += `With: ${withPeople.join(', ')}<br>`;
+            }
+
+            jobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.entry_id;
+                const validationStatus = job.email_parse_title_validation_status || 'unknown';
+
+                let className = '';
+                if (validationStatus === 'error') className += 'validation-error ';
+                else if (validationStatus === 'warning') className += 'validation-warning ';
+                if (!hasRequired) className += 'missing-required ';
+                if (isCurrent) className += 'current-job';
+
+                // Add validation indicator for error state
+                let validationIndicator = '';
+                if (validationStatus === 'error') {
+                    validationIndicator = '<span class="validation-status-indicator error"></span>';
+                } else if (validationStatus === 'warning') {
+                    validationIndicator = '<span class="validation-status-indicator warning"></span>';
+                }
+
+                const status = job.job_field_status ? ` - ${job.job_field_status}` : '';
+                summaryHTML += `<div class="${className}">${validationIndicator}${job.job_name || 'Unnamed Job'}${status}</div>`;
+            });
+
+            summaryHTML += `</div>`;
+            summaryDiv.innerHTML = summaryHTML;
+        }
+
+        async function updateJobsList() {
+            const jobsListDiv = document.getElementById('jobsList');
+            let listHTML = '';
+
+            jobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.entry_id;
+                const validationStatus = job.email_parse_title_validation_status || 'unknown';
+
+                let className = 'job-link';
+                if (validationStatus === 'error') className += ' validation-error';
+                else if (validationStatus === 'warning') className += ' validation-warning';
+                if (!hasRequired) className += ' missing-required';
+                if (isCurrent) className += ' current-job';
+
+                // Add validation indicator for error state
+                let validationIndicator = '';
+                if (validationStatus === 'error') {
+                    validationIndicator = '<span class="validation-status-indicator error"></span>';
+                } else if (validationStatus === 'warning') {
+                    validationIndicator = '<span class="validation-status-indicator warning"></span>';
+                }
+
+                const status = job.job_field_status ? ` - ${job.job_field_status}` : '';
+                const deviceInfo = job.device_id ? ` (${job.device_id})` : '';
+
+                listHTML += `<div style="display: flex; align-items: center; margin: 5px 0;">
+                    <a href="#" class="${className}" onclick="loadJobById(${job.entry_id}); return false;" style="flex: 1; margin: 0;">
+                        ${validationIndicator}${job.job_name || 'Unnamed Job'}${status}${deviceInfo}
+                    </a>
+                </div>`;
+            });
+
+            jobsListDiv.innerHTML = listHTML || '<p>No jobs for this date.</p>';
+        }
+
+        function updateDailyJobs() {
+            const dailyJobsDiv = document.getElementById('dailyJobs');
+            let dailyHTML = '';
+
+            jobs.forEach(job => {
+                const missingFields = validateRequiredFields(job);
+                const hasRequired = missingFields.length === 0;
+                const isCurrent = currentJobId === job.entry_id;
+                let className = 'daily-job-box';
+                if (!hasRequired) className += ' missing-required';
+                if (isCurrent) className += ' current-job';
+
+                dailyHTML += `<div class="${className}">`;
+                dailyHTML += `<strong>Job: ${job.job_name || 'Unnamed Job'}</strong><br>`;
+                dailyHTML += `Number: ${job.job_number || 'N/A'}<br>`;
+                dailyHTML += `Date: ${job.job_start_date || 'N/A'} | ${job.job_start_time || 'N/A'} - ${job.job_end_time || 'N/A'}<br>`;
+                dailyHTML += `Status: ${job.job_field_status || 'N/A'}<br>`;
+                dailyHTML += `Device: ${job.device_id || 'N/A'} (${job.device_type || 'N/A'})<br>`;
+                dailyHTML += `Building: ${job.building_code || 'N/A'}<br>`;
+                if (job.job_trouble_description) {
+                    dailyHTML += `Problem: ${job.job_trouble_description}<br>`;
+                }
+                if (job.job_work_description) {
+                    dailyHTML += `Work: ${job.job_work_description}<br>`;
+                }
+                dailyHTML += `</div>`;
+            });
+
+            dailyJobsDiv.innerHTML = dailyHTML || '<p>No jobs for this date.</p>';
+        }
+
+        function updateCalendar() {
+            const calendarDiv = document.getElementById('calendar');
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const lastDay = new Date(currentYear, currentMonth + 1, 0);
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+            let calendarHTML = '';
+
+            // Day headers
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayNames.forEach(day => {
+                calendarHTML += `<div class="calendar-day-header">${day}</div>`;
+            });
+
+            // Calendar days
+            for (let i = 0; i < 42; i++) {
+                const date = new Date(startDate);
+                date.setDate(startDate.getDate() + i);
+                const dateStr = date.toISOString().split('T')[0];
+                const dayJobs = jobs.filter(job => job.job_start_date === dateStr);
+
+                calendarHTML += `<div class="calendar-day">`;
+                calendarHTML += `<div class="calendar-day-number" onclick="selectDate('${dateStr}')" style="cursor: pointer;">${date.getDate()}</div>`;
+
+                dayJobs.forEach(job => {
+                    const missingFields = validateRequiredFields(job);
+                    const hasRequired = missingFields.length === 0;
+                    const className = hasRequired ? 'calendar-job' : 'calendar-job missing-required';
+                    const displayText = `${job.building_code || job.job_number || 'N/A'}`;
+                    calendarHTML += `<div class="${className}" onclick="loadJobById(${job.entry_id})" title="${job.job_name}">${displayText}</div>`;
+                });
+
+                calendarHTML += `</div>`;
+            }
+
+            calendarDiv.innerHTML = `<div class="calendar">${calendarHTML}</div>`;
+        }
+
+        function selectDate(dateStr) {
+            document.getElementById('job_start_date').value = dateStr;
+            loadJobsForDate(dateStr).then(() => {
+                updateDisplays();
+                if (jobs.length > 0) {
+                    loadJobById(jobs[0].entry_id);
+                }
+            });
+        }
+
+        function updateDisplays() {
+            updateJobSummary();
+            updateJobsList();
+            updateDailyJobs();
+            updateCalendar();
+        }
+
+        function addTechnicalDetails() {
+            const dropdown = document.getElementById('technicalDetailsDropdown');
+            const textarea = document.getElementById('job_technical_details');
+
+            if (dropdown.value && technicalDetailsTemplates[dropdown.value]) {
+                const currentText = textarea.value;
+                const newText = currentText ? currentText + '\n\n' + technicalDetailsTemplates[dropdown.value] : technicalDetailsTemplates[dropdown.value];
+                textarea.value = newText;
+                dropdown.value = '';
+            }
+        }
+
+        // Theme management functions
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('wms_theme') || 'light';
+            setTheme(savedTheme);
+            updateThemeToggleIcon(savedTheme);
+        }
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('wms_theme', theme);
+            updateThemeToggleIcon(theme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = localStorage.getItem('wms_theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            setTheme(newTheme);
+        }
+
+        function updateThemeToggleIcon(theme) {
+            const toggleBtn = document.getElementById('themeToggle');
+            toggleBtn.textContent = theme === 'light' ? '🌙' : '☀️';
+            toggleBtn.title = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+        }
+
+        // Navigation menu functions
+        function showSettings() {
+            const settingsHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background-color: var(--section-bg); color: var(--text-color); padding: 30px; border-radius: 10px; max-width: 500px; width: 90%; max-height: 80%; overflow-y: auto;">
+                        <h3 style="margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px;">System Settings</h3>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Theme</h4>
+                            <p>Current theme: <strong>${localStorage.getItem('wms_theme') || 'light'}</strong></p>
+                            <p>Use the moon/sun icon in the navigation bar to toggle between light and dark themes.</p>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Data Storage</h4>
+                            <p>Jobs are stored locally using IndexedDB browser storage.</p>
+                            <p>Total jobs stored: <strong id="totalJobsCount">Loading...</strong></p>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4>System Info</h4>
+                            <p>Work Management System v1.0</p>
+                            <p>Last updated: ${new Date().toLocaleDateString()}</p>
+                        </div>
+
+                        <div style="text-align: right; margin-top: 30px;">
+                            <button onclick="closeModal()" style="padding: 10px 20px; background-color: var(--nav-bg); color: var(--nav-text); border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', settingsHTML);
+            updateTotalJobsCount();
+        }
+
+        function showImportData() {
+            const importHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background-color: var(--section-bg); color: var(--text-color); padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80%; overflow-y: auto;">
+                        <h3 style="margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px;">📥 Import Data</h3>
+
+                        <div style="margin: 20px 0;">
+                            <h4>📧 Email Files (.eml/.msg)</h4>
+                            <p>Import service call emails directly into the system.</p>
+                            <div style="margin: 10px 0;">
+                                <input type="file" id="modalEmailInput" accept=".msg,.eml" multiple style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-color); color: var(--text-color);">
+                                <button onclick="handleModalEmailImport()" style="margin-top: 10px; padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">Import Email Files</button>
+                            </div>
+                            <small style="color: #666;">⚠️ Email titles may contain incorrect building info - parser prioritizes body content</small>
+                        </div>
+
+                        <div style="margin: 20px 0; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                            <h4>💾 JSON Backup Files</h4>
+                            <p>Restore from a previously exported system backup.</p>
+                            <div style="margin: 10px 0;">
+                                <input type="file" id="modalJsonInput" accept=".json" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-color); color: var(--text-color);">
+                                <button onclick="handleModalJsonImport()" style="margin-top: 10px; padding: 10px 20px; background-color: #6f42c1; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">Import JSON Backup</button>
+                            </div>
+                            <small style="color: #666;">This will merge with existing data. Use "Reset All Data" first if you want a clean import.</small>
+                        </div>
+
+                        <div style="margin: 20px 0; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                            <h4>📋 Clipboard Data</h4>
+                            <p>Paste JSON data directly from clipboard.</p>
+                            <div style="margin: 10px 0;">
+                                <textarea id="clipboardImportData" placeholder="Paste JSON data here..." style="width: 100%; height: 100px; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-color); color: var(--text-color); resize: vertical;"></textarea>
+                                <button onclick="handleClipboardImport()" style="margin-top: 10px; padding: 10px 20px; background-color: #fd7e14; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">Import from Clipboard</button>
+                            </div>
+                        </div>
+
+                        <div id="modalImportStatus" style="margin: 20px 0;"></div>
+
+                        <div style="text-align: right; margin-top: 30px; display: flex; gap: 10px; justify-content: flex-end;">
+                            <button onclick="closeModal()" style="padding: 10px 20px; background-color: var(--nav-bg); color: var(--nav-text); border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', importHTML);
+        }
+
+        async function handleModalEmailImport() {
+            const fileInput = document.getElementById('modalEmailInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                showModalImportStatus('Please select email files to import.', true);
+                return;
+            }
+
+            await handleEmailImport(files);
+            setTimeout(() => {
+                closeModal();
+            }, 2000);
+        }
+
+        async function handleModalJsonImport() {
+            const fileInput = document.getElementById('modalJsonInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showModalImportStatus('Please select a JSON backup file.', true);
+                return;
+            }
+
+            try {
+                showModalImportStatus('Processing JSON backup...');
+                const reader = new FileReader();
+                
+                reader.onload = async (e) => {
+                    try {
+                        const backupData = JSON.parse(e.target.result);
+                        await importJsonBackup(backupData);
+                        showModalImportStatus('JSON backup imported successfully!');
+                        
+                        // Reload current view
+                        const currentDate = document.getElementById('job_start_date').value;
+                        await loadJobsForDate(currentDate);
+                        updateDisplays();
+                        
+                        setTimeout(() => {
+                            closeModal();
+                        }, 2000);
+                        
+                    } catch (error) {
+                        console.error('JSON import failed:', error);
+                        showModalImportStatus(`JSON import failed: ${error.message}`, true);
+                    }
+                };
+                
+                reader.readAsText(file);
+                
+            } catch (error) {
+                console.error('File reading failed:', error);
+                showModalImportStatus(`File reading failed: ${error.message}`, true);
+            }
+        }
+
+        async function handleClipboardImport() {
+            const textarea = document.getElementById('clipboardImportData');
+            const jsonData = textarea.value.trim();
+            
+            if (!jsonData) {
+                showModalImportStatus('Please paste JSON data in the text area.', true);
+                return;
+            }
+
+            try {
+                showModalImportStatus('Processing clipboard data...');
+                const backupData = JSON.parse(jsonData);
+                await importJsonBackup(backupData);
+                showModalImportStatus('Clipboard data imported successfully!');
+                
+                // Reload current view
+                const currentDate = document.getElementById('job_start_date').value;
+                await loadJobsForDate(currentDate);
+                updateDisplays();
+                
+                setTimeout(() => {
+                    closeModal();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Clipboard import failed:', error);
+                showModalImportStatus(`Import failed: ${error.message}`, true);
+            }
+        }
+
+        async function importJsonBackup(backupData) {
+            if (!backupData || typeof backupData !== 'object') {
+                throw new Error('Invalid backup data format');
+            }
+
+            let importCount = 0;
+
+            // Import buildings
+            if (backupData.buildings && Array.isArray(backupData.buildings)) {
+                for (const building of backupData.buildings) {
+                    try {
+                        await wmsStorage.saveBuilding(building);
+                        importCount++;
+                    } catch (error) {
+                        console.warn('Failed to import building:', building, error);
+                    }
+                }
+            }
+
+            // Import devices
+            if (backupData.devices && Array.isArray(backupData.devices)) {
+                for (const device of backupData.devices) {
+                    try {
+                        await wmsStorage.saveDevice(device);
+                        importCount++;
+                    } catch (error) {
+                        console.warn('Failed to import device:', device, error);
+                    }
+                }
+            }
+
+            // Import tickets
+            if (backupData.tickets && Array.isArray(backupData.tickets)) {
+                for (const ticket of backupData.tickets) {
+                    try {
+                        await wmsStorage.saveTicket(ticket);
+                        importCount++;
+                    } catch (error) {
+                        console.warn('Failed to import ticket:', ticket, error);
+                    }
+                }
+            }
+
+            // Import ticket entries (jobs)
+            if (backupData.ticket_entries && Array.isArray(backupData.ticket_entries)) {
+                for (const entry of backupData.ticket_entries) {
+                    try {
+                        await wmsStorage.saveTicketEntry(entry);
+                        importCount++;
+                    } catch (error) {
+                        console.warn('Failed to import job entry:', entry, error);
+                    }
+                }
+            }
+
+            // Log the import
+            await wmsStorage.logImportExport('IMPORT', 'json', 'SUCCESS', `Imported ${importCount} records from backup`);
+            updateSystemStatus(`Import completed: ${importCount} records imported`);
+        }
+
+        function showModalImportStatus(message, isError = false) {
+            const statusDiv = document.getElementById('modalImportStatus');
+            if (statusDiv) {
+                const className = isError ? 'import-error' : 'import-success';
+                statusDiv.innerHTML = `<div class="import-status ${className}">${message}</div>`;
+            }
+        }
+
+        function showAbout() {
+            const aboutHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background-color: var(--section-bg); color: var(--text-color); padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80%; overflow-y: auto;">
+                        <h3 style="margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px;">About Work Management System</h3>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Overview</h4>
+                            <p>The Work Management System is a comprehensive web application designed to streamline service ticket management for technicians and field service teams.</p>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Key Features</h4>
+                            <ul>
+                                <li><strong>Email Import:</strong> Automated parsing of .eml and .msg service call emails</li>
+                                <li><strong>Local Storage:</strong> IndexedDB-based offline data persistence</li>
+                                <li><strong>Flexible Export:</strong> Multiple formats including clipboard, JSON, CSV, and summary</li>
+                                <li><strong>Form Validation:</strong> Real-time required field checking and highlighting</li>
+                                <li><strong>Mobile Responsive:</strong> Optimized for tablets and mobile devices</li>
+                                <li><strong>Calendar View:</strong> Date-based job organization and navigation</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Data Architecture</h4>
+                            <p>The system uses a PostgreSQL-compatible data structure stored in IndexedDB, ensuring seamless future migration to server-based storage. All data relationships (buildings, devices, tickets, job entries) are properly normalized.</p>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4>Technical Stack</h4>
+                            <ul>
+                                <li><strong>Frontend:</strong> HTML5, CSS3, ES6+ JavaScript (Vanilla)</li>
+                                <li><strong>Storage:</strong> IndexedDB with PostgreSQL schema compatibility</li>
+                                <li><strong>File Processing:</strong> Email parsing for .eml/.msg formats</li>
+                                <li><strong>Export Formats:</strong> Clipboard, JSON, CSV, formatted text</li>
+                            </ul>
+                        </div>
+
+                        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                            <p style="margin: 0; font-style: italic;">Work Management System v1.0</p>
+                        </div>
+
+                        <div style="text-align: right; margin-top: 20px;">
+                            <button onclick="closeModal()" style="padding: 10px 20px; background-color: var(--nav-bg); color: var(--nav-text); border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', aboutHTML);
+        }
+
+        async function exportData() {
+            if (!confirm('This will export all your job data as a JSON file. Continue?')) {
+                return;
+            }
+
+            try {
+                updateSystemStatus('Preparing data export...');
+
+                const allEntries = await wmsStorage.getAllTicketEntries();
+                const allTickets = await wmsStorage.getAllTickets();
+                const allBuildings = await wmsStorage.getAllBuildings();
+                const allDevices = await wmsStorage.getAllDevices();
+                const allHistory = await wmsStorage.getAllHistory?.() || []; // May not be implemented
+                const exportLogs = await wmsStorage.getAllImportExportLogs?.() || []; // May not be implemented
+
+                const exportData = {
+                    metadata: {
+                        export_date: new Date().toISOString(),
+                        version: "1.0",
+                        total_jobs: allEntries.length,
+                        description: "Complete Work Management System data export"
+                    },
+                    buildings: allBuildings,
+                    devices: allDevices,
+                    tickets: allTickets,
+                    ticket_entries: allEntries,
+                    history: allHistory,
+                    import_export_logs: exportLogs
+                };
+
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `work-management-system-backup-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                await wmsStorage.logImportExport('EXPORT', 'json', 'SUCCESS', `Complete system backup with ${allEntries.length} jobs`);
+                updateSystemStatus('Data export completed successfully');
+
+                alert(`System data exported successfully!\n\nFile includes:\n- ${allBuildings.length} buildings\n- ${allDevices.length} devices\n- ${allTickets.length} tickets\n- ${allEntries.length} job entries\n\nUse this file for backup or system migration.`);
+
+            } catch (error) {
+                console.error('Export failed:', error);
+                updateSystemStatus('Data export failed: ' + error.message, true);
+                alert('Export failed: ' + error.message);
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('⚠️ WARNING: This will permanently delete ALL your job data, buildings, devices, and history!\n\nThis action cannot be undone. Make sure you have exported your data first.\n\nContinue with deletion?')) {
+                return;
+            }
+
+            if (!confirm('Are you ABSOLUTELY sure? This will delete everything.')) {
+                return;
+            }
+
+            try {
+                updateSystemStatus('Clearing all data...');
+                await wmsStorage.clearAllData();
+
+                // Reset UI state
+                jobs = [];
+                currentJobId = null;
+                currentJobEntry = null;
+                clearForm();
+
+                // Reload jobs for current date (will be empty)
+                const currentDate = document.getElementById('job_start_date').value;
+                await loadJobsForDate(currentDate);
+                updateDisplays();
+
+                updateSystemStatus('All data has been cleared');
+                alert('All data has been cleared. The system has been reset to a clean state.');
+
+            } catch (error) {
+                console.error('Data clearing failed:', error);
+                updateSystemStatus('Data clearing failed: ' + error.message, true);
+                alert('Failed to clear data: ' + error.message);
+            }
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('[style*="position: fixed"]');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Handle email import data from Email Inspector
+        async function handleEmailImportMessage(event) {
+            console.log('📧 Received postMessage:', event.data);
+
+            if (event.data && event.data.type === 'EMAIL_IMPORT_DATA') {
+                try {
+                    const emailData = event.data.data;
+                    console.log('📧 Processing email import data:', emailData);
+
+                    updateSystemStatus('Processing imported email data...');
+
+                    // Convert to new structure and save using migrateLegacyJob
+                    const entryId = await wmsStorage.migrateLegacyJob(emailData);
+
+                    // Log import
+                    await wmsStorage.logImportExport('IMPORT', 'email_inspector', 'SUCCESS', 'Email Inspector import');
+
+                    // Reload jobs and load the new one
+                    await loadJobsForDate(emailData.job_start_date || document.getElementById('job_start_date').value);
+                    await loadJobById(entryId);
+
+                    showImportStatus('Email data imported successfully from Email Inspector!');
+                    updateSystemStatus('Email data imported successfully');
+
+                    // Clear the localStorage data
+                    localStorage.removeItem('emailInspectorData');
+
+                    console.log('✅ Email import completed successfully');
+
+                } catch (error) {
+                    console.error('❌ Email import failed:', error);
+                    showImportStatus(`Failed to import email data: ${error.message}`, true);
+                    updateSystemStatus('Email import failed: ' + error.message, true);
+                }
+            }
+        }
+
+        // Check for email import data in localStorage on page load
+        async function checkForEmailImportData() {
+            const emailData = localStorage.getItem('emailInspectorData');
+            if (emailData) {
+                console.log('📧 Found email import data in localStorage');
+                try {
+                    const parsedData = JSON.parse(emailData);
+                    console.log('📧 Processing stored email data:', parsedData);
+
+                    updateSystemStatus('Processing stored email data...');
+
+                    // Convert to new structure and save using migrateLegacyJob
+                    const entryId = await wmsStorage.migrateLegacyJob(parsedData);
+
+                    // Log import
+                    await wmsStorage.logImportExport('IMPORT', 'email_inspector', 'SUCCESS', 'Email Inspector localStorage import');
+
+                    // Reload jobs and load the new one
+                    await loadJobsForDate(parsedData.job_start_date || document.getElementById('job_start_date').value);
+                    await loadJobById(entryId);
+
+                    showImportStatus('Email data imported successfully from Email Inspector!');
+                    updateSystemStatus('Email data imported successfully');
+
+                    // Clear the localStorage data
+                    localStorage.removeItem('emailInspectorData');
+
+                    console.log('✅ localStorage email import completed successfully');
+
+                } catch (error) {
+                    console.error('❌ localStorage email import failed:', error);
+                    updateSystemStatus('Stored email import failed: ' + error.message, true);
+                    localStorage.removeItem('emailInspectorData'); // Clean up bad data
+                }
+            }
+        }
+
+        async function updateTotalJobsCount() {
+            try {
+                const allEntries = await wmsStorage.getAllTicketEntries();
+                const countEl = document.getElementById('totalJobsCount');
+                if (countEl) {
+                    countEl.textContent = allEntries.length;
+                }
+            } catch (error) {
+                console.warn('Could not get job count:', error);
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize theme
+            initializeTheme();
+
+            // Initialize the system
+            initializeSystem();
+
+            // Handle email import data from Email Inspector
+            window.addEventListener('message', handleEmailImportMessage);
+            
+            // Also check for data in localStorage on load
+            checkForEmailImportData();
+
+            // Add theme toggle listener
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+            // Dropdown menu functionality
+            const dropdownIcon = document.querySelector('.dropdown .nav-icon');
+            const dropdown = document.querySelector('.dropdown');
+
+            dropdownIcon.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('show');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            // Form validation listeners
+            const form = document.getElementById('jobForm');
+            const inputs = form.querySelectorAll('input, select, textarea');
+
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    // Handle textarea auto-resize first
+                    if (input.tagName === 'TEXTAREA') {
+                        input.style.height = 'auto';
+                        input.style.height = input.scrollHeight + 'px';
+                    }
+                    // Then run validation
+                    highlightRequiredFields();
+                });
+                input.addEventListener('change', highlightRequiredFields);
+            });
+
+            // Also ensure initial highlighting on page load
+            setTimeout(highlightRequiredFields, 100); // Run after form resets
+
+            // Date change listener
+            document.getElementById('job_start_date').addEventListener('change', async function() {
+                await loadJobsForDate(this.value);
+                updateDisplays();
+            });
+
+            // Drag and drop setup
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        });
+    </script>
+</body>
+</html>

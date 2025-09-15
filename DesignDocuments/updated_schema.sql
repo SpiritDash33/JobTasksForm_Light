@@ -1,0 +1,520 @@
+-- ===========================================
+-- Updated Job Ticket System Database Schema
+-- ===========================================
+-- File Name: updated_schema.sql
+-- Created Date: 2025-09-12
+-- Modified Date: 2025-09-12
+-- Version: 2.0.0
+-- Description: Updated PostgreSQL schema with clear hierarchical task naming
+--
+-- 🏗️ SYSTEM ARCHITECTURE:
+--    1 Building → 1 Device → Many Possible Errors/Tasks
+-- Comments:
+-- • Hierarchical naming: task_general_entries (general tasks) vs task_ticket_entries (ticket-based technical work)
+-- • Maintains same functionality as schema.sql but with clearer structure
+-- • Updated all references for new table/column names
+-- Update Notes:
+-- • 2025-09-12 (v2.0.0): Renamed tables with task_ prefix for clarity
+--                          ticket_misc_entries → task_general_entries
+--                          ticket_entries → task_ticket_entries
+--
+
+-- Enable pgcrypto for encryption of sensitive data
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ===========================================
+-- TABLES (Categorized by Function)
+-- ===========================================
+
+-- ===========================================
+-- CORE ENTITIES (Fundamental System Objects)
+-- ===========================================
+
+-- Users table (custom User model based on Django migrations)
+-- Stores authenticated users and their role-based permissions
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    password VARCHAR(255) NOT NULL,
+    last_login TIMESTAMP WITH TIME ZONE NULL,
+    is_superuser BOOLEAN NOT NULL DEFAULT FALSE, -- System administrators with full access
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,     -- Administrative users with broad access
+    is_manager BOOLEAN NOT NULL DEFAULT FALSE,   -- Management-level users with oversight
+    is_worker BOOLEAN NOT NULL DEFAULT FALSE,    -- Field technicians and workers
+    email VARCHAR(254) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    date_joined TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_name VARCHAR(255) NOT NULL,
+    user_alias VARCHAR(255) NULL,
+    user_preferred_color VARCHAR(50) NULL,
+    user_preferred_landing_page VARCHAR(255) NULL,
+    user_preferred_profile_picture TEXT NULL,
+    user_preferred_light_or_dark_mode_mobile VARCHAR(10) DEFAULT 'dark' NOT NULL,
+    user_preferred_light_or_dark_mode_desktop VARCHAR(10) DEFAULT 'light' NOT NULL,
+    user_preferred_enable_alerts JSONB NULL,
+    user_preferred_enable_notifications JSONB NULL,
+    user_is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    user_preferred_timezone VARCHAR(50) DEFAULT 'America/Los_Angeles' NOT NULL,
+    user_agreed_to_terms BOOLEAN NOT NULL DEFAULT FALSE,
+    oauth_provider VARCHAR(50) NULL,
+    oauth_id VARCHAR(255) NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Buildings table (physical locations where work occurs)
+-- Centralized registry of managed facility locations with mapping data
+CREATE TABLE buildings (
+    id SERIAL PRIMARY KEY,
+    building_uuid UUID NOT NULL DEFAULT gen_random_uuid(),
+    building_site_code VARCHAR(50) NOT NULL UNIQUE,     -- Unique short identifier for the building/location
+    building_name VARCHAR(255) NOT NULL,        -- Full descriptive name of the building
+    building_address TEXT NULL,                 -- Complete physical address for mailing/identification
+    google_maps_link VARCHAR(1000) NULL,      -- Direct Google Maps integration link
+    apple_maps_link VARCHAR(1000) NULL,        -- Direct Apple Maps integration link
+    description TEXT NULL,                     -- Additional details about the facility
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Groups table (organizational groupings for users)
+-- Enables role-based access control and targeted notifications
+CREATE TABLE groups (
+    id SERIAL PRIMARY KEY,
+    group_name VARCHAR(50) NOT NULL UNIQUE
+);
+
+-- Devices table (physical security hardware/assets)
+-- Represents readers, cameras, door controls, etc. installed at buildings
+CREATE TABLE devices (
+    id SERIAL PRIMARY KEY,
+    device_uuid UUID NOT NULL DEFAULT gen_random_uuid(),
+    building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE RESTRICT,
+    device_name VARCHAR(255) NOT NULL,
+    device_type VARCHAR(50) NULL,
+    description TEXT NULL,
+    UNIQUE(building_id, device_name)
+);
+
+-- ===========================================
+-- ORGANIZATION TABLES (Work Classification & Grouping)
+-- ===========================================
+
+-- Tickets table (organizes technical ticket-based work into manageble units)
+-- Groups related technical work under unique ticket numbers
+CREATE TABLE tickets (
+    id SERIAL PRIMARY KEY,
+    ticket_number VARCHAR(50) NOT NULL UNIQUE,
+    building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE RESTRICT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE NULL
+);
+
+-- ===========================================
+-- TASK TABLES (Main Business Logic - Work Records)
+-- ===========================================
+
+-- Task Ticket Entries table (complex technical job tasks tied to specific tickets)
+-- Detailed work records for technicians servicing security systems
+CREATE TABLE task_ticket_entries (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE RESTRICT,
+    job_name VARCHAR(255) NOT NULL,
+    related_tickets TEXT NULL,                 -- Related ticket numbers (device-based + manual entries)
+    job_start_date DATE NOT NULL,
+    job_start_time TIME WITHOUT TIME ZONE NOT NULL,
+    job_end_time TIME WITHOUT TIME ZONE NOT NULL,
+    job_participants VARCHAR(255) NULL,
+    job_reference_number VARCHAR(50) NULL,
+    job_escort_delay TIME WITHOUT TIME ZONE NULL,
+    job_hindrances TEXT NULL,
+    job_materials_used TEXT NULL,
+    job_materials_needed TEXT NULL,
+    job_access_needed TEXT NULL,
+    job_programming_changes TEXT NULL,
+    job_dispatch_type VARCHAR(50) NOT NULL,
+    job_field_status VARCHAR(50) NOT NULL,
+    job_filed_status_notes TEXT NULL,
+    job_followup_required BOOLEAN NOT NULL,
+    job_device_details TEXT NULL,
+    job_trouble_type VARCHAR(50) NOT NULL,
+    job_trouble_description TEXT NOT NULL,
+    job_work_description TEXT NOT NULL,
+    job_technical_details TEXT NULL,
+    job_changed_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    email_parse_title_validation_flag JSONB NULL,          -- Stores cross-validation results between email titles and body content
+    email_parse_title_validation_status VARCHAR(20) DEFAULT 'unknown' CHECK (email_parse_title_validation_status IN ('valid', 'warning', 'error', 'unknown')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE NULL
+);
+
+-- Task General Entries table (general administrative tasks - NOT tied to tickets)
+-- Simple work records for meetings, follow-ups, general maintenance
+CREATE TABLE task_general_entries (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    general_name VARCHAR(255) NOT NULL,
+    general_start_date DATE NOT NULL,
+    general_start_time TIME WITHOUT TIME ZONE NOT NULL,
+    general_description TEXT NULL,
+    general_location VARCHAR(255) NULL,
+    general_duration INTEGER NULL,
+    general_priority VARCHAR(50) NULL,
+    general_participants VARCHAR(255) NULL,
+    general_notes TEXT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE NULL
+);
+
+-- Task Ticket Entry Devices junction table (links technical tasks to specific devices)
+-- Many-to-many relationship for associating work with affected equipment
+CREATE TABLE task_ticket_entry_devices (
+    id BIGSERIAL PRIMARY KEY,
+    task_ticket_entry_id INTEGER NOT NULL REFERENCES task_ticket_entries(id) ON DELETE CASCADE,
+    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
+    UNIQUE(task_ticket_entry_id, device_id)
+);
+
+-- User groups junction table (assigns users to organizational groups)
+-- Many-to-many relationship enabling flexible role-based access
+CREATE TABLE user_groups (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    UNIQUE(user_id, group_id)
+);
+
+-- ===========================================
+-- SECURITY & SESSION TABLES (Authentication & Access Control)
+-- ===========================================
+
+-- User sessions table (active authentication sessions)
+-- Manages current user logins and session tokens
+CREATE TABLE user_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    login_origin VARCHAR(255) NOT NULL,
+    token VARCHAR(512) NOT NULL UNIQUE,
+    issued_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    last_accessed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    device_info VARCHAR(255) NULL,
+    ip_address VARCHAR(45) NULL
+);
+
+-- Email verification tokens table (temporary verification codes)
+-- Handles account email verification workflows
+CREATE TABLE email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME_ZONE NOT NULL
+);
+
+-- Login attempts table (tracks authentication attempts for security monitoring)
+-- Logs successful/failed logins for analytics and fraud detection
+CREATE TABLE login_attempts (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    email VARCHAR(255) NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    login_origin VARCHAR(255) NULL,
+    success BOOLEAN NOT NULL,
+    attempt_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ===========================================
+-- AUDIT & HISTORY TABLES (Change Tracking)
+-- ===========================================
+
+-- History table (complete audit trail of all data changes)
+-- Tracks INSERT/UPDATE/DELETE operations for compliance
+CREATE TABLE history (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    record_id INTEGER NOT NULL,
+    action VARCHAR(20) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    changes JSONB NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User interaction logs table (tracks user interface interactions)
+-- Analysis of user behavior and interface usage patterns
+CREATE TABLE user_interaction_logs (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    action_type VARCHAR(50) NOT NULL,
+    page_name VARCHAR(255) NULL,
+    widget_name VARCHAR(255) NULL,
+    action_details JSONB NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ===========================================
+-- COMMUNICATION TABLES (Alerts & Notifications)
+-- ===========================================
+
+-- Notifications table (general system notifications to users/groups)
+-- Informational messages about system events, updates, etc.
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    group_id INTEGER NULL REFERENCES groups(id) ON DELETE SET NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Alerts table (critical system alerts and warnings)
+-- Automated alerts for task issues, security threats, system problems
+CREATE TABLE alerts (
+    id SERIAL PRIMARY KEY,
+    task_ticket_entry_id INTEGER NULL REFERENCES task_ticket_entries(id) ON DELETE CASCADE,
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    group_id INTEGER NULL REFERENCES groups(id) ON DELETE SET NULL,
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    trigger_field VARCHAR(50) NULL,
+    message TEXT NOT NULL,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_by UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    resolved_at TIMESTAMP WITH TIME ZONE NULL,
+    escalation_level VARCHAR(20) NOT NULL DEFAULT 'initial' CHECK (escalation_level IN ('initial', 'escalated', 'critical')),
+    last_escalated_at TIMESTAMP WITH TIME ZONE NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Alert acknowledgments table (tracks alert acknowledgment by users)
+-- Ensures critical alerts receive proper attention
+CREATE TABLE alert_acknowledgments (
+    id BIGSERIAL PRIMARY KEY,
+    alert_id INTEGER NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    acknowledged_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(alert_id, user_id)
+);
+
+-- ===========================================
+-- METADATA & INTEGRATION TABLES (System Record Keeping)
+-- ===========================================
+
+-- Import export logs table (tracks data import/export operations)
+-- Auditing of bulk data operations for data integrity
+CREATE TABLE import_export_logs (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    operation_type VARCHAR(20) NOT NULL CHECK (operation_type IN ('IMPORT', 'EXPORT')),
+    file_type VARCHAR(50) NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('SUCCESS', 'FAILURE')),
+    details TEXT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ===========================================
+-- FUNCTIONS AND TRIGGERS
+-- ===========================================
+
+-- Trigger function to create alerts for task_ticket_entries (updated references)
+CREATE OR REPLACE FUNCTION create_alert_on_task_ticket_entry() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.job_materials_needed IS NOT NULL THEN
+        INSERT INTO alerts (task_ticket_entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.id, 'job-related', 'medium', 'job_materials_needed', 'Materials needed for job', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_access_needed IS NOT NULL THEN
+        INSERT INTO alerts (task_ticket_entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.id, 'job-related', 'medium', 'job_access_needed', 'Access needed for job', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_programming_changes IS NOT NULL THEN
+        INSERT INTO alerts (task_ticket_entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.id, 'job-related', 'medium', 'job_programming_changes', 'Programming changes required', CURRENT_TIMESTAMP);
+    END IF;
+    IF NEW.job_followup_required = TRUE THEN
+        INSERT INTO alerts (task_ticket_entry_id, alert_type, severity, trigger_field, message, created_at)
+        VALUES (NEW.id, 'job-related', 'high', 'job_followup_required', 'Follow-up required for job', CURRENT_TIMESTAMP);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for task ticket entry alerts (updated to new table name)
+CREATE TRIGGER task_ticket_entry_alert_trigger
+    AFTER INSERT OR UPDATE ON task_ticket_entries
+    FOR EACH ROW EXECUTE FUNCTION create_alert_on_task_ticket_entry();
+
+-- Function to ensure device building_id matches ticket building_id (updated table references)
+CREATE OR REPLACE FUNCTION check_task_ticket_entry_device_building() RETURNS TRIGGER AS $$
+BEGIN
+    IF (SELECT d.building_id FROM devices d WHERE d.id = NEW.device_id) !=
+       (SELECT b.id FROM buildings b
+        JOIN tickets t ON b.id = t.building_id
+        JOIN task_ticket_entries tte ON t.id = tte.ticket_id
+        WHERE tte.id = NEW.task_ticket_entry_id LIMIT 1) THEN
+        RAISE EXCEPTION 'Device must be from the same building as the task ticket entry';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for task ticket entry device building validation
+CREATE TRIGGER task_ticket_entry_device_building_check
+    BEFORE INSERT OR UPDATE ON task_ticket_entry_devices
+    FOR EACH ROW EXECUTE FUNCTION check_task_ticket_entry_device_building();
+
+-- Security function - Failed login alerts (unchanged)
+CREATE OR REPLACE FUNCTION check_failed_logins() RETURNS TRIGGER AS $$
+DECLARE
+    failed_count INTEGER;
+BEGIN
+    IF NEW.success = FALSE THEN
+        SELECT COUNT(*) INTO failed_count
+        FROM login_attempts
+        WHERE email = NEW.email
+          AND ip_address = NEW.ip_address
+          AND success = FALSE
+          AND attempt_time > CURRENT_TIMESTAMP - INTERVAL '5 minutes';
+        IF failed_count >= 5 THEN
+            INSERT INTO alerts (user_id, alert_type, severity, message, created_at)
+            VALUES (NEW.user_id, 'security', 'high',
+                    CONCAT('Multiple failed login attempts detected for email: ', NEW.email, ' from IP: ', NEW.ip_address),
+                    CURRENT_TIMESTAMP);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for failed login alerts
+CREATE TRIGGER failed_login_alert_trigger
+    AFTER INSERT ON login_attempts
+    FOR EACH ROW EXECUTE FUNCTION check_failed_logins();
+
+-- Security function - Suspicious IP activity alerts (unchanged)
+CREATE OR REPLACE FUNCTION check_suspicious_ip_activity() RETURNS TRIGGER AS $$
+DECLARE
+    failed_count INTEGER;
+BEGIN
+    IF NEW.success = FALSE THEN
+        SELECT COUNT(*) INTO failed_count
+        FROM login_attempts
+        WHERE ip_address = NEW.ip_address
+          AND success = FALSE
+          AND attempt_time > CURRENT_TIMESTAMP - INTERVAL '5 minutes';
+
+        IF failed_count >= 10 THEN
+            INSERT INTO alerts (alert_type, severity, message, created_at)
+            VALUES ('security', 'high',
+                    CONCAT('Suspicious IP activity detected from IP: ', NEW.ip_address, ' with multiple failed login attempts across accounts'),
+                    CURRENT_TIMESTAMP);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for suspicious IP activity alerts
+CREATE TRIGGER suspicious_ip_alert_trigger
+    AFTER INSERT ON login_attempts
+    FOR EACH ROW EXECUTE FUNCTION check_suspicious_ip_activity();
+
+-- Security function - Unauthorized access alerts (updated field references)
+CREATE OR REPLACE FUNCTION check_unauthorized_access() RETURNS TRIGGER AS $$
+DECLARE
+    is_authorized BOOLEAN;
+BEGIN
+    -- Simplified check based on user roles
+    is_authorized = FALSE;
+    IF NEW.action = 'DELETE' THEN
+        -- Admins and managers can delete
+        IF EXISTS (SELECT 1 FROM users WHERE id = NEW.user_id AND (is_admin = TRUE OR is_manager = TRUE)) THEN
+            is_authorized = TRUE;
+        END IF;
+    ELSIF NEW.action = 'UPDATE' THEN
+        -- Admins and managers can update
+        IF EXISTS (SELECT 1 FROM users WHERE id = NEW.user_id AND (is_admin = TRUE OR is_manager = TRUE)) THEN
+            is_authorized = TRUE;
+        END IF;
+    END IF;
+
+    -- Create alert if unauthorized
+    IF NOT is_authorized THEN
+        INSERT INTO alerts (user_id, alert_type, severity, message, created_at)
+        VALUES (NEW.user_id, 'security', 'critical',
+                CONCAT('Unauthorized access attempt by user: ', NEW.user_id, ' on table: ', NEW.table_name, ', action: ', NEW.action),
+                CURRENT_TIMESTAMP);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for unauthorized access alerts
+CREATE TRIGGER unauthorized_access_alert_trigger
+    AFTER INSERT ON history
+    FOR EACH ROW EXECUTE FUNCTION check_unauthorized_access();
+
+-- ===========================================
+-- VIEWS
+-- ===========================================
+
+-- View to enforce notification limits (5 non-critical alerts per day per user) (updated reference to task_ticket_entries)
+CREATE VIEW daily_alert_counts AS
+SELECT user_id, DATE(created_at) AS alert_date, COUNT(*) AS alert_count
+FROM alerts
+WHERE alert_type != 'critical'
+GROUP BY user_id, DATE(created_at);
+
+-- ===========================================
+-- INDEXES FOR PERFORMANCE
+-- ===========================================
+
+-- User-related indexes (unchanged)
+CREATE INDEX IF NOT EXISTS idx_users_oauth ON users (oauth_provider, oauth_id) WHERE oauth_id IS NOT NULL;
+
+-- Session indexes (unchanged)
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_is_active ON user_sessions(is_active) WHERE is_active = TRUE;
+
+-- Login attempt indexes (unchanged)
+CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_attempt_time ON login_attempts(attempt_time);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_email_ip ON login_attempts(email, ip_address);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip_address, attempt_time);
+
+-- Task Ticket Entry indexes (updated table name and foreign key reference)
+CREATE INDEX IF NOT EXISTS idx_task_ticket_entries_user_id ON task_ticket_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_task_ticket_entries_ticket_id ON task_ticket_entries(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_task_ticket_entries_job_start_date ON task_ticket_entries(job_start_date);
+
+-- Task General Entry indexes (updated table name)
+CREATE INDEX IF NOT EXISTS idx_task_general_entries_user_id ON task_general_entries(user_id);
+
+-- Notification indexes (unchanged)
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_group_id ON notifications(group_id);
+
+-- Alert indexes (updated reference to task_ticket_entries)
+CREATE INDEX IF NOT EXISTS idx_alerts_task_ticket_entry_id ON alerts(task_ticket_entry_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_group_id ON alerts(group_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_alert_type ON alerts(alert_type);
+CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_alerts_unresolved ON alerts (alert_type, severity) WHERE is_resolved = FALSE;
+
+-- Junction table indexes (updated reference to task_ticket_entry_devices)
+CREATE INDEX IF NOT EXISTS idx_task_ticket_entry_devices_task_ticket_entry_id ON task_ticket_entry_devices(task_ticket_entry_id);
+CREATE INDEX IF NOT EXISTS idx_task_ticket_entry_devices_device_id ON task_ticket_entry_devices(device_id);
+
+-- ===========================================
+-- INITIAL DATA
+-- ===========================================
+
+-- Initialize groups with default roles
+INSERT INTO groups (group_name) VALUES ('field'), ('manager'), ('admin')
+ON CONFLICT (group_name) DO NOTHING;
